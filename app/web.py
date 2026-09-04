@@ -65,6 +65,10 @@ class ReportBuildIn(BaseModel):
     # auto-matched, the literal "openwb" to force openWB's own cost (skip
     # correction entirely), or omitted/None for the normal auto-match.
     price_overrides: dict[int, int | str | None] = {}
+    # Overrides report_settings' cost_basis for this one report/preview --
+    # same "global default, overridable per request" pattern as `columns`
+    # above. None (the default) means "use the configured default".
+    cost_basis: str | None = None
 
 
 class ReportGenerateIn(ReportBuildIn):
@@ -554,8 +558,17 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
     return sessions, ordered_rows
 
 
+# German label for report_build.COST_BASES, shown as the PDF's own
+# "Kostenbasis" meta line and as a column in "Bisherige Berichte" -- since
+# cost_basis is now choosable per report (not just a fixed app-wide
+# value), the document has to say which one it used to be
+# self-explanatory on its own.
+_COST_BASIS_LABELS = {"openwb": "openWB-Wert", "corrected": "Korrigiert"}
+
+
 async def _report_meta(
-    pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict
+    pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict,
+    cost_basis: str,
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
@@ -580,6 +593,7 @@ async def _report_meta(
         vehicle_names=vehicle_display,
         show_signature_line=settings["show_signature_line"],
         orientation=settings["orientation"],
+        cost_basis_label=_COST_BASIS_LABELS[cost_basis],
     )
 
 
@@ -605,13 +619,15 @@ def _content_disposition(filename: str) -> str:
 _REPORT_SUMMARY_SELECT = (
     "SELECT r.id, r.created_at, r.title, r.column_selection, r.total_duration_seconds, "
     "r.total_energy_kwh, r.total_energy_discharged_kwh, r.total_range_charged_km, "
-    "r.total_cost_openwb, r.total_cost_corrected, "
+    "r.total_cost_openwb, r.total_cost_corrected, r.cost_basis, "
     "(SELECT count(*) FROM report_sessions rs WHERE rs.report_id = r.id) AS session_count "
     "FROM reports r"
 )
 
 
 def _report_summary_row(r) -> dict:
+    cost_basis = r["cost_basis"]
+    total_cost = float(r["total_cost_openwb"] if cost_basis == "openwb" else r["total_cost_corrected"])
     return {
         "id": r["id"],
         "created_at": r["created_at"].isoformat(),
@@ -623,6 +639,12 @@ def _report_summary_row(r) -> dict:
         "total_range_charged_km": float(r["total_range_charged_km"]),
         "total_cost_openwb": float(r["total_cost_openwb"]),
         "total_cost_corrected": float(r["total_cost_corrected"]),
+        "cost_basis": cost_basis,
+        "cost_basis_label": _COST_BASIS_LABELS[cost_basis],
+        # The report's own actual headline total -- whichever of the two
+        # raw totals above matches cost_basis -- so "Bisherige Berichte"
+        # can show one "Kosten" column instead of two per row.
+        "total_cost": total_cost,
         "session_count": r["session_count"],
     }
 
@@ -633,48 +655,57 @@ async def api_report_preview(body: ReportBuildIn):
     to HTML and persists nothing -- for the review UI's live preview."""
     pool = get_pool()
     settings = await get_report_settings(pool)
+    cost_basis = body.cost_basis or settings["cost_basis"]
     sessions, rows = await _load_report_sessions(pool, body.session_ids, body.price_overrides)
     try:
-        data = build_report_data(
-            sessions, body.columns or settings["default_columns"], settings["cost_basis"]
-        )
+        data = build_report_data(sessions, body.columns or settings["default_columns"], cost_basis)
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    meta = await _report_meta(pool, "Vorschau", "Vorschau", datetime.now(), rows, settings)
+    meta = await _report_meta(
+        pool, "Vorschau", "Vorschau", datetime.now(), rows, settings, cost_basis
+    )
     return render_html(data, meta)
 
 
 async def _generate_report(
-    pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict
+    pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict,
+    cost_basis: str | None = None,
 ) -> dict:
     """Builds and persists an immutable report -- shared by the
     POST /api/reports HTTP route and the MCP generate_report tool
     (mcp_server.py). Reports are immutable once created -- "regenerate"
     always inserts a new row rather than updating an existing one. Insert
     happens in two steps because the PDF's own header/footer displays the
-    report's id, which only exists once the row is inserted. Raises
+    report's id, which only exists once the row is inserted. `cost_basis`
+    overrides report_settings' own default for this one report (None uses
+    the configured default) -- recorded on the row itself so "Bisherige
+    Berichte" can show which basis a given report actually used. Raises
     ReportBuildError (caller decides how to surface it: HTTPException for
     the HTTP route, a plain exception for the MCP tool)."""
     settings = await get_report_settings(pool)
+    resolved_cost_basis = cost_basis or settings["cost_basis"]
     sessions, rows = await _load_report_sessions(pool, session_ids, price_overrides)
-    data = build_report_data(sessions, columns or settings["default_columns"], settings["cost_basis"])
+    data = build_report_data(
+        sessions, columns or settings["default_columns"], resolved_cost_basis
+    )
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             report_row = await conn.fetchrow(
                 "INSERT INTO reports (title, column_selection, total_duration_seconds, "
                 "total_energy_kwh, total_energy_discharged_kwh, total_range_charged_km, "
-                "total_cost_openwb, total_cost_corrected, pdf_data) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at",
+                "total_cost_openwb, total_cost_corrected, cost_basis, pdf_data) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at",
                 title, data.columns, data.totals.duration_seconds,
                 data.totals.energy_kwh, data.totals.energy_discharged_kwh,
                 data.totals.range_charged_km, data.totals.cost_openwb,
-                data.totals.cost_corrected, b"",
+                data.totals.cost_corrected, resolved_cost_basis, b"",
             )
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), title, report_row["created_at"], rows, settings
+                pool, str(report_id), title, report_row["created_at"], rows, settings,
+                resolved_cost_basis,
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(
@@ -701,7 +732,10 @@ async def _generate_report(
 async def api_create_report(body: ReportGenerateIn):
     pool = get_pool()
     try:
-        return await _generate_report(pool, body.title, body.session_ids, body.columns, body.price_overrides)
+        return await _generate_report(
+            pool, body.title, body.session_ids, body.columns, body.price_overrides,
+            body.cost_basis,
+        )
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

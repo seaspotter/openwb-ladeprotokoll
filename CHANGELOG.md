@@ -28,6 +28,12 @@ what that means in practice for this project.
   `statistik.html`) now show the lightning-bolt brand icon next to
   "openWB Ladeprotokoll", matching the favicon and the PDF header -- it
   was missing from the actual web UI this whole time.
+- Report generation gets a "Kostenbasis" choice (openWB-Wert/Korrigiert)
+  right next to the title field in "Bericht erstellen" -- a conscious,
+  per-report override of the existing Berichts-Einstellungen default, not
+  a change to what that default means. The generated PDF documents which
+  basis it used as its own "Kostenbasis" meta line, and "Bisherige
+  Berichte" shows the same per report.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI

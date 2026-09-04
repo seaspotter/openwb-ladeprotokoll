@@ -58,23 +58,29 @@ async def search_sessions(
 
 
 @mcp.tool()
-async def generate_report(session_ids: list[int], title: str, columns: list[str] | None = None) -> dict:
+async def generate_report(
+    session_ids: list[int], title: str, columns: list[str] | None = None,
+    cost_basis: str | None = None,
+) -> dict:
     """Generates and permanently stores an audit-safe PDF charging-cost
     report from the given session ids (see search_sessions), immutable
     once created. `title` becomes both the document's heading and (with a
     date prefix) its filename. `columns` optionally overrides which of the
     report's columns appear (see the openwb://report-columns resource for
     valid keys) -- omit it to use the configured default from Berichts-
-    Einstellungen. Every session is priced automatically (the same
-    matching search_sessions already shows); there's no per-session price
-    override here, unlike the review UI -- use that UI first if a specific
-    session needs a manual price override before generating the report.
-    Returns the report's summary (id, title, totals, session count) --
+    Einstellungen. `cost_basis` optionally overrides which "Kosten" figure
+    the report uses -- "openwb" (openWB's own value) or "corrected" (this
+    app's price-entry correction) -- omit it to use the configured
+    default. Every session is priced automatically (the same matching
+    search_sessions already shows); there's no per-session price override
+    here, unlike the review UI -- use that UI first if a specific session
+    needs a manual price override before generating the report. Returns
+    the report's summary (id, title, totals, cost_basis, session count) --
     the rendered PDF itself is downloadable at
     GET /reports/{id}/pdf on this same host, not returned inline here."""
     pool = get_pool()
     try:
-        return await _generate_report(pool, title, session_ids, columns, {})
+        return await _generate_report(pool, title, session_ids, columns, {}, cost_basis)
     except ReportBuildError as exc:
         raise ValueError(str(exc)) from exc
     except HTTPException as exc:

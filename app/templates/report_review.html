@@ -125,6 +125,10 @@ try {
     <h2>Bericht</h2>
     <form class="inline" id="report-form">
       <input type="text" id="report-title" placeholder="Titel (z.B. August 2026)" required>
+      <select id="report-cost-basis" title="Kostenbasis für diesen Bericht">
+        <option value="openwb">Kostenbasis: openWB-Wert</option>
+        <option value="corrected">Kostenbasis: Korrigiert</option>
+      </select>
       <button type="button" id="preview-btn">Vorschau</button>
       <button type="submit">Bericht erzeugen</button>
     </form>
@@ -137,7 +141,7 @@ try {
     <h2>Bisherige Berichte</h2>
     <table id="reports-table">
       <thead>
-        <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th class="numeric">Kosten (korrigiert)</th><th></th></tr>
+        <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th>Kostenbasis</th><th class="numeric">Kosten</th><th></th></tr>
       </thead>
       <tbody id="reports-body"></tbody>
     </table>
@@ -324,8 +328,14 @@ function currentSelectionPayload() {
   }
   // No `columns` here: which PDF columns appear is decided solely by
   // Berichts-Einstellungen (Einstellungen modal) -- omitting it makes the
-  // backend fall back to that saved default, see web.py.
-  return { session_ids, price_overrides };
+  // backend fall back to that saved default, see web.py. `cost_basis` IS
+  // sent, unlike `columns` -- it's a deliberate per-report choice made
+  // right here (see the "Kostenbasis" select above the Titel field), not
+  // something that should only ever live in one global settings panel.
+  return {
+    session_ids, price_overrides,
+    cost_basis: document.getElementById('report-cost-basis').value,
+  };
 }
 
 document.getElementById('filter-source').addEventListener('change', () => {
@@ -385,7 +395,8 @@ async function loadReports() {
       <td>${r.title}</td>
       <td>${new Date(r.created_at).toLocaleString('de-DE')}</td>
       <td class="numeric">${r.session_count}</td>
-      <td class="numeric">${fmtNum(r.total_cost_corrected, 2, ' €')}</td>
+      <td>${r.cost_basis_label}</td>
+      <td class="numeric">${fmtNum(r.total_cost, 2, ' €')}</td>
       <td>
         <a href="/reports/${r.id}/pdf" target="_blank">PDF</a>
         &nbsp;<button data-action="delete-report" data-id="${r.id}" class="danger">Löschen</button>
@@ -404,7 +415,10 @@ document.getElementById('reports-body').addEventListener('click', async (ev) => 
 });
 
 (async function init() {
-  await Promise.all([loadSourceFilter(), loadReviewPriceEntries()]);
+  const [reportSettings] = await Promise.all([
+    api('/api/report-settings'), loadSourceFilter(), loadReviewPriceEntries(),
+  ]);
+  document.getElementById('report-cost-basis').value = reportSettings.cost_basis;
   await loadVehicleAndChargepointFilters();
   await loadSessions();
   await loadReports();

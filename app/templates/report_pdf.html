@@ -95,6 +95,10 @@
     <td class="label">Fahrzeug(e)</td>
     <td>{{ meta.vehicle_names | join(", ") if meta.vehicle_names else "&ndash;" }}</td>
   </tr>
+  <tr>
+    <td class="label">Kostenbasis</td>
+    <td>{{ meta.cost_basis_label }}</td>
+  </tr>
 </table>
 
 {% if data.price_basis %}

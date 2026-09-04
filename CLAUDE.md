@@ -39,7 +39,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   — so it's a plain new `CREATE TABLE`, no additive `ALTER` needed.
   `app_settings` is a second single-row settings table alongside
   `report_settings`, deliberately kept separate since it's unrelated to
-  report generation — see `app_settings.py`.
+  report generation — see `app_settings.py`. `reports.cost_basis` was
+  added additively (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, this
+  project's own live deployment already had real `reports` rows) — the
+  `DEFAULT 'corrected'` backfills every report generated before this
+  column existed, matching what `report_settings.DEFAULT_COST_BASIS` was
+  at the time.
 - `app/sources.py` — **pure**: `Source` dataclass plus `base_url`
   validation/normalization (bare IP, host:port, or full URL, all
   normalized to `scheme://host[:port]` with no trailing slash). Unit
@@ -186,7 +191,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   already-formatted display strings, not bare names — each vehicle with a
   `vehicles.license_plate` set is rendered `"<name> (<plate>)"` in the
   "Fahrzeug(e)" meta line, so the Kennzeichen ends up documented on every
-  report without needing its own column. The "Kosten" column/cell never
+  report without needing its own column. `ReportMeta.cost_basis_label`
+  (web.py's small local `_COST_BASIS_LABELS` dict, not something
+  `report_build.py` owns — `cost_basis` itself is already validated by
+  `report_build.build()`) is its own "Kostenbasis" meta line, since
+  `cost_basis` is chosen per report (see `web.py` below), not a single
+  fixed app-wide value — the document has to say which one it used to
+  stay self-explanatory. The "Kosten" column/cell never
   gets the red `.flagged` styling that `index.html`/`report_review.html`
   use for a session whose corrected cost diverges from openWB's own value
   — that highlighting is deliberately a review-time aid for deciding what
@@ -231,7 +242,28 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   module-level functions the routes call rather than inlining directly —
   `mcp_server.py`'s `search_sessions`/`generate_report` tools call the
   exact same two functions, so there's one implementation of each, not a
-  second copy for MCP.
+  second copy for MCP. `cost_basis` is choosable per report at generation
+  time (`ReportBuildIn.cost_basis`, `None` meaning "use
+  `report_settings`'s default"), not just as a global default — a
+  deliberate exception to this app's usual "settings, not per-instance
+  overrides" rule, since the user specifically wants a conscious choice
+  each time a report is generated (e.g. one report using openWB's own
+  value, another using the corrected one) rather than having to go into
+  Berichts-Einstellungen and back before every generation.
+  `_generate_report` resolves it once (`resolved_cost_basis`) and uses
+  that same value for both the actual `build_report_data` call and what
+  gets persisted onto the `reports` row, so a report's stored `cost_basis`
+  always matches what its own PDF actually shows. `_report_summary_row`
+  picks `total_cost` from whichever of the two stored raw totals
+  (`total_cost_openwb`/`total_cost_corrected`) matches that row's own
+  `cost_basis`, so `GET /reports`/`report_review.html`'s "Bisherige
+  Berichte" table shows one real "Kosten" column plus a "Kostenbasis"
+  column, not two mostly-irrelevant totals per row. **Note**: a third
+  `"corrected_grid_only"` basis (pricing only a session's grid-imported
+  energy share) was built, then fully reverted after explicit, repeated
+  user feedback the same day — don't reintroduce it without being asked
+  again; `report_build.COST_BASES` is deliberately back to exactly
+  `("openwb", "corrected")`.
   `GET /api/vehicles` returns every vehicle name ever seen across all
   sources' sessions (`SELECT DISTINCT ... FROM sessions`), left-joined with
   its optional `vehicles.license_plate` — not just the rows that happen to
@@ -273,8 +305,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   prefix has no business surfacing through the MCP boundary. Two
   resources: `openwb://sources` and `openwb://report-columns`, for
   discovering valid `search_sessions`/`generate_report` parameter values
-  without a separate HTTP round-trip. No new authentication — same
-  no-auth, LAN-trust model as the rest of the app.
+  without a separate HTTP round-trip. `generate_report`'s optional
+  `cost_basis` param mirrors the web UI's per-report override (`web.py`'s
+  `ReportBuildIn.cost_basis`) — an AI assistant generating a report can
+  ask for `"openwb"` explicitly, same as picking it from the dropdown in
+  `report_review.html`. No new authentication — same no-auth, LAN-trust
+  model as the rest of the app.
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
   chargepoint are `<select>`s populated from the currently-loaded sessions,
@@ -364,7 +400,18 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   reports. Sends no `columns` in its request bodies at all (see
   `_settings_modal.html` above for why) — `web.py` falls back to
   `report_settings`'s `default_columns` whenever `columns` is omitted.
-  Keep new UI copy in German too.
+  `cost_basis` is the deliberate exception to that rule: a `<select>`
+  right next to the Titel field (pre-filled from `GET /api/report-settings`
+  on page load, but always sent explicitly, never omitted) lets each
+  report's cost basis be a conscious per-generation choice — see
+  `web.py`'s note on why this one setting is overridable per-report while
+  `columns` isn't. Options are exactly `"openwb"`/`"corrected"` — no
+  third option; a grid-only-pricing variant was tried here and reverted,
+  see `web.py`'s note. "Bisherige Berichte" shows a "Kostenbasis" column
+  and a single "Kosten" column (`r.total_cost` — whichever raw total
+  actually matches that report's own `cost_basis`), not a
+  `total_cost_corrected`-labeled column that would be wrong for an
+  openWB-basis report. Keep new UI copy in German too.
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
   (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as

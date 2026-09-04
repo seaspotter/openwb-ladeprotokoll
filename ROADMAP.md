@@ -128,6 +128,16 @@ open an issue or just start working if something here matters to you.
       (`app/static/chart.umd.min.js`) rather than CDN-loaded, since this
       app otherwise has zero external network dependencies anywhere and
       should keep working on a fully offline LAN.
+- [x] Report generation gained a per-report "Kostenbasis" choice
+      (openWB-Wert/Korrigiert) next to the title field in "Bericht
+      erstellen" — overrides Berichts-Einstellungen's own default for
+      that one report; the PDF and "Bisherige Berichte" both show which
+      basis a given report actually used. A third grid-only-pricing basis
+      was tried alongside this (and separately, as an overview-only
+      column) and fully reverted after repeated user feedback the same
+      day — `report_build.COST_BASES` stays exactly
+      `("openwb", "corrected")`, don't reintroduce a third value without
+      being asked again.
 
 ## Next
 
