@@ -10,11 +10,11 @@ Auf jeder Seite rechts oben:
 - **Jetzt abrufen** *(nur auf der Übersicht)* — ruft den aktuellen Monat
   aller aktiven Quellen ab und lädt die Tabelle danach neu. Für einzelne
   Quellen oder ältere Monate siehe Einstellungen → Verlauf abrufen.
-- **🌙/☀️** — wechselt zwischen hellem und dunklem Design; die Wahl wird
-  im Browser gemerkt (pro Browser, nicht serverseitig) und gilt für alle
-  drei Seiten.
-- **⚙️ Einstellungen** — öffnet die Einstellungen als Dialogfenster über
-  der aktuellen Seite (kein Seitenwechsel nötig).
+- **Sonne/Mond-Symbol** — wechselt zwischen hellem und dunklem Design; die
+  Wahl wird im Browser gemerkt (pro Browser, nicht serverseitig) und gilt
+  für alle drei Seiten.
+- **Zahnrad-Symbol (Einstellungen)** — öffnet die Einstellungen als
+  Dialogfenster über der aktuellen Seite (kein Seitenwechsel nötig).
 
 ## Übersicht (Startseite)
 
@@ -41,7 +41,7 @@ ebenfalls vermerkt.
 Diese Ansicht ist rein zur Übersicht — die Auswahl für einen Bericht
 passiert unter "Bericht erstellen".
 
-## Einstellungen (⚙️)
+## Einstellungen (Zahnrad-Symbol)
 
 Ein Dialogfenster mit fünf Bereichen, in dieser Reihenfolge:
 

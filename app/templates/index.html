@@ -101,7 +101,7 @@ try {
       <tbody id="sessions-body"></tbody>
     </table>
     <p class="empty-hint" id="empty-hint" hidden>
-      Noch keine Ladevorgänge. Quelle unter "⚙️ Einstellungen" hinzufügen, dann "Jetzt abrufen".
+      Noch keine Ladevorgänge. Quelle unter "⚙ Einstellungen" hinzufügen, dann "Jetzt abrufen".
     </p>
   </div>
 </main>
@@ -165,7 +165,7 @@ function updateLastFetchDisplay(sources) {
   const failed = sources.filter((s) => s.enabled && s.last_fetch_status && s.last_fetch_status !== 'ok').length;
   resultEl.textContent = failed === 0
     ? `Letzter Abruf: ${fmtDateTime(latest)}`
-    : `Letzter Abruf: ${fmtDateTime(latest)} (${failed} Quelle(n) zuletzt fehlgeschlagen -- Details unter "⚙️ Einstellungen")`;
+    : `Letzter Abruf: ${fmtDateTime(latest)} (${failed} Quelle(n) zuletzt fehlgeschlagen -- Details unter "⚙ Einstellungen")`;
 }
 
 async function loadVehicleAndChargepointFilters() {
@@ -235,7 +235,7 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
   const { sources } = await api('/api/sources');
   const enabled = sources.filter((s) => s.enabled);
   if (enabled.length === 0) {
-    resultEl.textContent = 'Keine aktive Quelle -- unter "⚙️ Einstellungen" hinzufügen.';
+    resultEl.textContent = 'Keine aktive Quelle -- unter "⚙ Einstellungen" hinzufügen.';
     return;
   }
   btn.disabled = true;
