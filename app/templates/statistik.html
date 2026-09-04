@@ -25,6 +25,8 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
   header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand-icon { display: flex; flex-shrink: 0; }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
   .brand-mark { font-weight: 700; color: #16a34a; }
   .nav-spacer { margin-left: auto; }
@@ -62,7 +64,12 @@ try {
 } catch (e) {}
 </script>
 <header>
-  <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  <div class="brand">
+    <span class="brand-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#16a34a"/><path d="M13 3 5 14h5l-1 7 8-11h-5z" fill="white"/></svg>
+    </span>
+    <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  </div>
   <a href="/" class="nav-btn">&larr; Übersicht</a>
   <span class="nav-spacer"></span>
   <div class="header-actions">

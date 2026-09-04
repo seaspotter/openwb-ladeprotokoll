@@ -370,7 +370,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   worth the added complexity of hooking into `_settings_modal.html`'s
   shared toggle handler for a live re-render).
 
-Header navigation is consistent across pages: a secondary "back" link on
+Header navigation is consistent across pages: a `.brand`/`.brand-icon`
+wrapper puts the same inline lightning-bolt SVG (identical markup to the
+favicon and `report_pdf.html`'s header logo — this app's own mark, not
+`openwb-logger`'s icon) to the left of the `<h1>` on every page — this was
+missing for a while (only the favicon/PDF had it, the actual page headers
+never did) until a user screenshot caught it; a secondary "back" link on
 the left where relevant (`← Übersicht`; `index.html` has none, it *is*
 "back"), the gear/theme icon pair on the right, and (`index.html` only)
 "Jetzt abrufen", "Statistik", and "Bericht erstellen →" — all plain flat
