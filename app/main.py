@@ -2,6 +2,10 @@
 --------------------------------
 Pulls openWB charge-log data into Postgres and turns it into audit-safe
 PDF charging-cost reports.
+
+Copyright (C) 2026 the project author(s).
+Licensed under the GNU Affero General Public License v3.0 or later.
+See the LICENSE file in the repository root for the full text.
 """
 from __future__ import annotations
 

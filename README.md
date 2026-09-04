@@ -14,20 +14,22 @@ reproducible even if the source data is edited later.
 
 ## Status
 
-The core flow works end to end: fetching sessions from openWB into
-Postgres, electricity price correction, and generating an audit-safe PDF
-report through the review UI. Verified against a real (embedded,
-disposable) Postgres and real HTTP routes, not just unit tests — see
-[DEVELOPMENT.md](DEVELOPMENT.md). Not yet exercised against a real,
-running openWB instance or a real `docker compose up` deployment — see
-[ROADMAP.md](ROADMAP.md) for what's left.
+The full flow works end to end and has been exercised against a real,
+running openWB installation and a real `docker compose up` deployment
+(Proxmox LXC and a local dev box), not just unit tests and an embedded
+test Postgres — see [DEVELOPMENT.md](DEVELOPMENT.md) for how both are
+verified. Actively used and iterated on real feedback; see
+[CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for what's
+shipped and what's next.
 
 ## Features
 
 - **Polls openWB's charge-log JSON over plain HTTP** —
   `data/charge_log/<yyyymm>.json`, served anonymously by openWB's own web
-  server, no core changes or credentials needed. Manual "fetch now" and an
-  automated daily fetch, both going through the same code path.
+  server, no core changes or credentials needed. Manual "Jetzt abrufen",
+  an on-demand backfill for older months, and a daily automatic fetch —
+  configurable on/off and at any wall-clock time (default shortly after
+  midnight) — all go through the same fetch/upsert code path.
 - **Multiple openWB instances, multiple vehicles**, fleet scenario from
   day one — every source and vehicle is just a row, not a hardcoded
   single-install assumption.
@@ -38,9 +40,12 @@ running openWB instance or a real `docker compose up` deployment — see
 - **Electricity price correction**: enter your provider/price-per-kWh/
   validity period (optionally scoped to a source and/or vehicle), and the
   tool recomputes cost from kWh × price, compares it against openWB's own
-  figure, and flags sessions where the two diverge — the price basis will
-  be printed on the PDF once report generation exists.
-- **Audit-safe PDF reports**: review your sessions, toggle which of the 14
+  figure, and flags sessions where the two diverge — visible while
+  reviewing which sessions to include in a report, though deliberately
+  not carried onto the final PDF itself.
+- **Per-vehicle Kennzeichen (license plate)**: openWB itself has no such
+  field, so it's recorded here and documented on every generated report.
+- **Audit-safe PDF reports**: review your sessions, toggle which of the 13
   Ladeprotokoll-mirroring columns appear, override the auto-matched price
   per session if needed, preview, then generate. Once generated, a report
   is immutable — the rendered PDF and a frozen snapshot of every included
@@ -118,6 +123,10 @@ the fetched sessions and generate a PDF.
 
 ## License
 
-Not yet decided — see [openwb-logger](https://github.com/seaspotter/openwb-logger)
-(AGPL-3.0-or-later) for the sibling project's choice, a likely default
-for this one too.
+GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) — see
+[LICENSE](LICENSE). Same choice as the sibling
+[openwb-logger](https://github.com/seaspotter/openwb-logger) project, for
+the same reason: this is a network service, and AGPL closes the "SaaS
+loophole" plain GPL has — a modified version run as a hosted service has
+to make its source available to that service's users too, not just to
+whoever receives a copy of the software itself.

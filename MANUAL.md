@@ -27,7 +27,9 @@ so keine leeren Ergebnisse.
 Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
 Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
 Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
-ab, sind beide Spalten rot hervorgehoben.
+ab, sind beide Spalten rot hervorgehoben. Diese Hervorhebung dient nur der
+Prüfung hier und unter "Bericht erstellen" — im fertigen PDF selbst
+erscheint die Kosten-Spalte immer neutral, ohne rote Markierung.
 
 Unter dem Filter steht "Letzter Abruf: ..." mit Datum/Uhrzeit des
 zuletzt (automatisch oder manuell) erfolgreich abgerufenen Ladeprotokolls

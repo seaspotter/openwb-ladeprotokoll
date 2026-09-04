@@ -65,8 +65,9 @@ pytest
 ```
 
 Everything under `tests/` exercises pure logic only (`chargelog_parse.py`,
-`sources.py`, `price_entries.py`, `report_build.py`) — no database or
-network required, deliberately, so the suite stays fast. HTTP fetching,
+`sources.py`, `price_entries.py`, `report_build.py`, `report_settings.py`,
+`app_settings.py`, and `scheduler.py`'s time-math helpers) — no database
+or network required, deliberately, so the suite stays fast. HTTP fetching,
 DB upserts, and PDF rendering are integration-level concerns without an
 automated suite entry, but see the next section for how to actually
 exercise them against a real database without `docker compose up`.
@@ -117,11 +118,12 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/price_entries.py` | Pure: price-entry match/precedence + corrected-cost math |
 | `app/report_build.py` | Pure: sessions + columns + cost_basis + price decisions -> formatted rows/totals for the template |
 | `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, orientation, signature line) — pure `validate()` + DB get/update |
+| `app/app_settings.py` | Single-row `app_settings` (auto-fetch on/off + wall-clock time) — same pure `validate()` + DB get/update pattern, read by both `web.py` and `scheduler.py` |
 | `app/pdf_render.py` | Jinja2 (`templates/report_pdf.html`) + WeasyPrint, HTML preview or PDF bytes from the same template |
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
-| `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" |
-| `app/templates/_settings_modal.html` | Jinja partial (no route): source/price CRUD, backfill, Berichts-Einstellungen, in a `<dialog>` popup |
+| `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" + a persistent "Letzter Abruf" freshness line |
+| `app/templates/_settings_modal.html` | Jinja partial (no route): Quellen (incl. automatic-fetch on/off + time), Preise, Fahrzeuge (Kennzeichen), Verlauf abrufen, Berichts-Einstellungen, all in a `<dialog>` popup |
 | `app/templates/report_review.html` | Session/price-override selection UI, at `/report-review` |
 | `app/templates/report_pdf.html` | The actual report layout — rendered as both the HTML preview and the PDF |
 
@@ -175,12 +177,18 @@ value ever turns up, check it against `parse_record`'s
   cleanly together — see Python's own `decimal` docs). `web.py`'s
   `_to_float` helper converts DB rows before they reach those modules —
   follow that pattern for any new caller.
-- A plain `[hidden]` attribute loses to *any* CSS rule that sets `display`
-  with equal-or-higher specificity — a class like `.inline { display:
-  flex }` on the same element beats the browser's own `[hidden]` rule in
-  its UA stylesheet, so the element stays visible regardless of the
-  attribute. Shipped once (the add-source/add-price forms in
-  `_settings_modal.html` stayed open even before their "+" button was
-  clicked). Fix: an explicit `[hidden] { display: none !important; }`
-  rule, present in that partial's own `<style>` block — keep it there if
-  you touch that CSS.
+- A plain `[hidden]` attribute (or a native state like `dialog:not([open])`)
+  loses to *any* CSS rule that sets `display` with equal-or-higher
+  specificity — a class like `.inline { display: flex }`, or an
+  unqualified `dialog#settings-modal { display: flex }`, beats the
+  browser's own hidden/closed-state rule in its UA stylesheet, so the
+  element stays visible regardless of the attribute. Shipped **twice** in
+  `_settings_modal.html`: once for the add-source/add-price forms (stayed
+  open even before their "+" button was clicked — fixed with an explicit
+  `[hidden] { display: none !important; }` rule), and once for the
+  `<dialog>` itself (clicking "×" still called `.close()` correctly, but
+  the panel stayed visibly stuck on the page — fixed by scoping the rule
+  to `dialog#settings-modal[open]`). **When adding any CSS that sets
+  `display` on an element with a hidden/closed native state, scope the
+  selector to the shown state explicitly** rather than writing it
+  unconditionally.
