@@ -345,11 +345,18 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `GET /api/sources`, since the pre-fetch source list used to pick which
   sources to hit is stale by the time the fetches finish) that also
   surfaces any source whose last scheduled/manual fetch failed. The
-  sessions table's "Kosten (Netzbezug)" column (`s.cost_used_grid_only`,
-  already present on every `/api/sessions` row) is always shown here —
-  unlike the report-generation "Kostenbasis" choice, there's no toggle on
-  this read-only overview, just more information alongside the existing
-  "Kosten (openWB)"/"Kosten (verwendet)" columns.
+  sessions table's two cost columns are labelled "Kosten (real)"/"Kosten
+  (korrigiert)" — a deliberate rename (was "Kosten (openWB)"/"Kosten
+  (verwendet)") once grid-only pricing existed as a concept, to keep the
+  labels generic rather than naming openWB specifically. This table does
+  **not** show the grid-only cost anywhere (`cost_used_grid_only` is
+  still computed and present on every `/api/sessions` row, just not
+  rendered here) — a first version added a third "Kosten (Netzbezug)"
+  column, but the user explicitly didn't want that on a page that's
+  neither filterable nor exportable by it; grid-only pricing only matters
+  as the "Kostenbasis" choice at report-generation time (see
+  `report_review.html` below), not as extra noise on the read-only
+  overview.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
@@ -418,17 +425,21 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   (mirroring `report_build.py`'s summing logic in JS, since this is just
   an interactive preview — the server-side build via
   `/api/reports/preview`/`/api/reports` is the actual source of truth for
-  what a generated report contains, including its own "Kosten (Netzbezug)"
-  row/column, mirrored client-side via `costUsedGridOnlyFor()` next to the
-  existing `costUsedFor()`); lists/links previously generated reports.
-  Sends no `columns` in its request bodies at all (see `_settings_modal.html`
-  above for why) — `web.py` falls back to `report_settings`'s
-  `default_columns` whenever `columns` is omitted. `cost_basis` is the
-  deliberate exception to that rule: a `<select>` right next to the Titel
-  field (pre-filled from `GET /api/report-settings` on page load, but
-  always sent explicitly, never omitted) lets each report's cost basis be
-  a conscious per-generation choice — see `report_build.py`'s note on why
-  this one setting is overridable per-report while `columns` isn't.
+  what a generated report contains); lists/links previously generated
+  reports. Same "Kosten (real)"/"Kosten (korrigiert)" labels as
+  `index.html`, no grid-only column here either (see that bullet above —
+  same user feedback applies to this page). Sends no `columns` in its
+  request bodies at all (see `_settings_modal.html` above for why) —
+  `web.py` falls back to `report_settings`'s `default_columns` whenever
+  `columns` is omitted. `cost_basis` is the deliberate exception to that
+  rule: a `<select>` right next to the Titel field (pre-filled from `GET
+  /api/report-settings` on page load, but always sent explicitly, never
+  omitted) lets each report's cost basis be a conscious per-generation
+  choice — see `report_build.py`'s note on why this one setting is
+  overridable per-report while `columns` isn't. This is the **only**
+  place grid-only pricing is user-facing in the browsing/selection UI —
+  a `"corrected_grid_only"` option in this one dropdown, not a column
+  anywhere.
   "Bisherige Berichte" shows a "Kostenbasis" column
   (`r.cost_basis_label`) and a single "Kosten" column (`r.total_cost` —
   whichever raw total actually matches that report's own `cost_basis`),

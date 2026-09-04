@@ -24,19 +24,18 @@ Fahrzeug, Ladepunkt und Zeitraum. Fahrzeug und Ladepunkt sind Auswahllisten
 die gewählte Quelle) statt Freitextfeldern — falsche Schreibweisen liefern
 so keine leeren Ergebnisse.
 
-Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
-Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
-Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
-ab, sind beide Spalten rot hervorgehoben. Diese Hervorhebung dient nur der
-Prüfung hier und unter "Bericht erstellen" — im fertigen PDF selbst
-erscheint die Kosten-Spalte immer neutral, ohne rote Markierung.
+Neben "Kosten (real)" (openWBs eigener Wert) steht der zum jeweiligen
+Ladevorgang passende Preis (oder "kein Preis hinterlegt") sowie "Kosten
+(korrigiert)", die tatsächlich verwendeten Kosten — weicht der
+korrigierte Preis spürbar vom realen Wert ab, sind beide Spalten rot
+hervorgehoben. Diese Hervorhebung dient nur der Prüfung hier und unter
+"Bericht erstellen" — im fertigen PDF selbst erscheint die Kosten-Spalte
+immer neutral, ohne rote Markierung.
 
-Zusätzlich steht "Kosten (Netzbezug)": derselbe hinterlegte Preis, aber
-nur auf den Netzbezug-Anteil der Energie angewendet (nicht auf PV/
-Speicher-Anteil) — für Fälle, in denen z. B. eine Erstattung nur den
-tatsächlichen Strombezug aus dem Netz abdecken soll, nicht selbst
-erzeugten PV-Strom. Diese Spalte wird immer mit angezeigt, unabhängig
-davon, welche Kostenbasis ein Bericht später verwendet.
+Die Netzbezug-Preiskorrektur (siehe "Bericht erstellen" weiter unten)
+taucht hier bewusst nicht als eigene Spalte auf — sie lässt sich weder
+filtern noch exportieren, sondern ist ausschließlich eine Kostenbasis-
+Wahl beim Erzeugen eines Berichts.
 
 Unter dem Filter steht "Letzter Abruf: ..." mit Datum/Uhrzeit des
 zuletzt (automatisch oder manuell) erfolgreich abgerufenen Ladeprotokolls
@@ -157,7 +156,7 @@ Nicht vergessen: nach Änderungen unten **Speichern** klicken.
    Preis ("Automatisch (Anbieter)" oder "Automatisch (kein Preis)"); über
    das Dropdown lässt sich das für diesen einen Ladevorgang übersteuern:
    ein bestimmter Preis-Eintrag, oder "openWB-Wert verwenden" (keine
-   Korrektur für diese Zeile). Die "Kosten (verwendet)"-Spalte und die
+   Korrektur für diese Zeile). Die "Kosten (korrigiert)"-Spalte und die
    Summe darunter aktualisieren sich sofort.
 3. **Vorschau** — zeigt das Dokument in der Seite, ohne etwas zu
    speichern; beliebig oft wiederholbar.

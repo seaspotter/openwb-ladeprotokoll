@@ -36,17 +36,23 @@ what that means in practice for this project.
   energy shouldn't count at the configured €/kWh rate. Always computed,
   not behind a per-entry flag (considered and rejected -- too easy to
   forget and silently get a wrong number for exactly the case that
-  matters most). `/api/sessions` and the review UI now show a "Kosten
-  (Netzbezug)" column alongside "Kosten (openWB)"/"Kosten (verwendet)".
-  Report generation gets a `cost_basis` selector ("Korrigiert (gesamt)"/
-  "Korrigiert (nur Netzbezug)"/"openWB-Wert") right next to the title
-  field -- a conscious, immutable per-report choice, not a global setting
-  that could be left in the wrong state -- pre-filled from Berichts-
-  Einstellungen's own default but always overridable. "Bisherige
-  Berichte" and the PDF's own meta info ("Kostenbasis") both show which
-  basis a given report actually used, and a new optional "Netzbezug
-  (kWh)" PDF column documents the underlying grid-energy figure. `mcp_server.py`'s
-  `generate_report` tool gained the same `cost_basis` parameter.
+  matters most). This is a report-generation-time choice only, not a
+  browsing-table column: report generation gets a `cost_basis` selector
+  ("Korrigiert (gesamt)"/"Korrigiert (nur Netzbezug)"/"openWB-Wert")
+  right next to the title field -- a conscious, immutable per-report
+  choice, not a global setting that could be left in the wrong state --
+  pre-filled from Berichts-Einstellungen's own default but always
+  overridable. "Bisherige Berichte" and the PDF's own meta info
+  ("Kostenbasis") both show which basis a given report actually used,
+  and a new optional "Netzbezug (kWh)" PDF column documents the
+  underlying grid-energy figure. `mcp_server.py`'s `generate_report`
+  tool gained the same `cost_basis` parameter. The overview and review
+  pages' two cost columns were renamed "Kosten (real)"/"Kosten
+  (korrigiert)" (were "Kosten (openWB)"/"Kosten (verwendet)") to stay
+  generic now that "corrected" can mean either total-energy or
+  grid-only depending on the report -- these two pages intentionally
+  don't show the grid-only figure at all, filtering/exporting it there
+  wouldn't be useful.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI
