@@ -54,6 +54,10 @@
   .totals-grid .stat .value { font-size: 15px; font-weight: 600; }
   .chart-wrap { position: relative; height: 320px; }
   .empty-hint { padding: 24px; text-align: center; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  td.numeric, th.numeric { text-align: right; }
 </style>
 </head>
 <body>
@@ -97,6 +101,7 @@ try {
       <div class="stat"><div class="label">Ladevorgänge</div><div class="value" id="stat-sessions">–</div></div>
       <div class="stat"><div class="label">Energie</div><div class="value" id="stat-energy">–</div></div>
       <div class="stat"><div class="label">Kosten</div><div class="value" id="stat-cost">–</div></div>
+      <div class="stat"><div class="label">PV-Eigenverbrauch</div><div class="value" id="stat-pv-share">–</div></div>
     </div>
   </div>
 
@@ -109,6 +114,20 @@ try {
   <div class="panel">
     <h2>Kosten</h2>
     <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2>Nach Fahrzeug</h2>
+    <table id="vehicle-table">
+      <thead>
+        <tr>
+          <th>Fahrzeug</th><th class="numeric">Ladevorgänge</th>
+          <th class="numeric">Energie</th><th class="numeric">PV-Anteil</th>
+          <th class="numeric">Kosten</th>
+        </tr>
+      </thead>
+      <tbody id="vehicle-body"></tbody>
+    </table>
   </div>
 </main>
 {% include "_settings_modal.html" %}
@@ -162,15 +181,35 @@ async function loadStatistics() {
   if (vehicle) params.set('vehicle', vehicle);
   params.set('granularity', granularity);
 
-  const { periods } = await api('/api/statistics?' + params.toString());
+  const { periods, by_vehicle } = await api('/api/statistics?' + params.toString());
   document.getElementById('empty-hint').hidden = periods.length > 0;
 
   const totalSessions = periods.reduce((a, p) => a + p.session_count, 0);
   const totalEnergy = periods.reduce((a, p) => a + p.energy_kwh, 0);
   const totalCost = periods.reduce((a, p) => a + p.cost, 0);
+  const totalPv = periods.reduce((a, p) => a + p.energy_pv_kwh + p.energy_bat_kwh, 0);
   document.getElementById('stat-sessions').textContent = totalSessions;
   document.getElementById('stat-energy').textContent = fmtNum(totalEnergy, 1, ' kWh');
   document.getElementById('stat-cost').textContent = fmtNum(totalCost, 2, ' €');
+  document.getElementById('stat-pv-share').textContent =
+    totalEnergy > 0 ? fmtNum((totalPv / totalEnergy) * 100, 0, ' %') : '–';
+
+  const vehicleBody = document.getElementById('vehicle-body');
+  vehicleBody.innerHTML = '';
+  for (const v of by_vehicle) {
+    const pvShare = v.energy_kwh > 0
+      ? fmtNum(((v.energy_pv_kwh + v.energy_bat_kwh) / v.energy_kwh) * 100, 0, ' %')
+      : '–';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${v.vehicle_name}</td>
+      <td class="numeric">${v.session_count}</td>
+      <td class="numeric">${fmtNum(v.energy_kwh, 1, ' kWh')}</td>
+      <td class="numeric">${pvShare}</td>
+      <td class="numeric">${fmtNum(v.cost, 2, ' €')}</td>
+    `;
+    vehicleBody.appendChild(tr);
+  }
 
   const colors = chartColors();
   const labels = periods.map((p) => p.period);

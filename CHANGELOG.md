@@ -18,10 +18,16 @@ what that means in practice for this project.
 - Monthly/yearly statistics at `/statistik` (`app/statistics.py`): total
   energy and cost per period, plus the grid/PV/battery/chargepoint split
   as absolute kWh (not an averaged percentage, which would misrepresent
-  the mix once session sizes vary a lot). Two Chart.js bar charts
-  (vendored locally as `app/static/chart.umd.min.js`, not CDN-loaded --
-  this app otherwise has zero external network dependencies and should
-  keep working on a fully offline LAN).
+  the mix once session sizes vary a lot), a PV-self-consumption KPI, and a
+  per-vehicle breakdown table for comparing vehicles against each other
+  rather than only against time. Two Chart.js bar charts (vendored locally
+  as `app/static/chart.umd.min.js`, not CDN-loaded -- this app otherwise
+  has zero external network dependencies and should keep working on a
+  fully offline LAN).
+- The app's own page headers (`index.html`/`report_review.html`/
+  `statistik.html`) now show the lightning-bolt brand icon next to
+  "openWB Ladeprotokoll", matching the favicon and the PDF header -- it
+  was missing from the actual web UI this whole time.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI

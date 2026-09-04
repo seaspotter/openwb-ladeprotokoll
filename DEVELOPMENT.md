@@ -124,7 +124,7 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
 | `app/mcp_server.py` | MCP server (`FastMCP`) mounted at `/mcp` -- `search_sessions`/`generate_report` tools, thin wrappers around `web.py`'s `_query_sessions`/`_generate_report` |
-| `app/statistics.py` | Pure: enriched sessions -> per-month/year `PeriodStats` (energy, cost, absolute grid/PV/battery/chargepoint kWh split) for `/statistik` |
+| `app/statistics.py` | Pure: enriched sessions -> per-month/year `PeriodStats` or per-vehicle `VehicleStats` (energy, cost, absolute grid/PV/battery/chargepoint kWh split) for `/statistik` |
 | `app/static/chart.umd.min.js` | Vendored Chart.js (not CDN-loaded -- see `main.py`'s `/static` mount comment), served for `/statistik`'s charts |
 | `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" + a persistent "Letzter Abruf" freshness line |
 | `app/templates/_settings_modal.html` | Jinja partial (no route): Quellen (incl. automatic-fetch on/off + time), Preise, Fahrzeuge (Kennzeichen), Verlauf abrufen, Berichts-Einstellungen, all in a `<dialog>` popup |

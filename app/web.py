@@ -29,6 +29,7 @@ from .report_settings import update_settings as update_report_settings
 from .sources import SourceValidationError, normalize_base_url, validate_name
 from .statistics import StatisticsError
 from .statistics import aggregate as aggregate_statistics
+from .statistics import aggregate_by_vehicle as aggregate_by_vehicle_statistics
 from .updater import check_for_update, get_current_version, run_update, self_update_available
 
 router = APIRouter()
@@ -415,21 +416,25 @@ async def api_statistics(
     source_id: int | None = None,
     vehicle: str | None = None,
 ):
-    """Per-month or per-year aggregates (energy, cost, grid/PV/battery/
-    chargepoint kWh split) for the /statistik page's charts. Reuses
-    _query_sessions for the actual data (same price-decision enrichment
-    the overview/review pages already show) and report_settings'
-    cost_basis for which cost figure to sum -- one "Kosten" total, same
-    simplification as report_build.py, not openWB/corrected side by
-    side."""
+    """Per-month/year aggregates plus a per-vehicle breakdown (energy,
+    cost, grid/PV/battery/chargepoint kWh split) for the /statistik
+    page's charts. Reuses _query_sessions for the actual data (same
+    price-decision enrichment the overview/review pages already show) and
+    report_settings' cost_basis for which cost figure to sum -- one
+    "Kosten" total, same simplification as report_build.py, not
+    openWB/corrected side by side."""
     pool = get_pool()
     settings = await get_report_settings(pool)
     sessions = await _query_sessions(pool, source_id, vehicle, None, None, None)
     try:
         periods = aggregate_statistics(sessions, granularity, settings["cost_basis"])
+        by_vehicle = aggregate_by_vehicle_statistics(sessions, settings["cost_basis"])
     except StatisticsError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"periods": [vars(p) for p in periods]}
+    return {
+        "periods": [vars(p) for p in periods],
+        "by_vehicle": [vars(v) for v in by_vehicle],
+    }
 
 
 @router.get("/api/report-columns")

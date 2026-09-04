@@ -149,8 +149,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   equally toward "average PV share"); unit tested specifically for this
   distinction. `cost` follows the same one-column simplification
   `report_build.py` uses (`cost_basis` picks `cost_openwb` or the
-  already-fallback-aware `cost_used`, never both side by side). Unit
-  tested.
+  already-fallback-aware `cost_used`, never both side by side).
+  `aggregate_by_vehicle` shares the exact same per-bucket accumulation
+  (`_accumulate`/`_empty_bucket`) but groups by `vehicle_name` instead of
+  time period, sorted by energy descending (the vehicle that charged the
+  most is worth seeing first, not alphabetical) — a session with no
+  `vehicle_name` at all groups under `"Unbekannt"` rather than being
+  silently dropped. Unit tested.
 - `app/pdf_render.py` — Jinja2 (`templates/report_pdf.html`) + WeasyPrint.
   One template renders both the HTML preview and the actual PDF — `@page`
   rules WeasyPrint honors are simply ignored by a browser. The page is
@@ -197,9 +202,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   a pydantic model — needed since it's a partial update of two unrelated
   fields), session listing (enriched with each session's matched
   price decision; filterable by source/vehicle/**chargepoint**/date),
-  `GET /api/statistics` (`statistics.py`'s `aggregate()` over
-  `_query_sessions`'s output, `report_settings`'s `cost_basis` for which
-  cost figure to sum), and report preview/generate/list/pdf/delete. Plain
+  `GET /api/statistics` (`statistics.py`'s `aggregate()` *and*
+  `aggregate_by_vehicle()` over the same `_query_sessions`-fetched
+  sessions in one call — no second DB round trip for the by-vehicle
+  breakdown — returning `{"periods": [...], "by_vehicle": [...]}`;
+  `report_settings`'s `cost_basis` decides which cost figure to sum), and
+  report preview/generate/list/pdf/delete. Plain
   parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns
   as `Decimal`; anything feeding `price_entries.py`/`report_build.py`/
   `statistics.py` converts to `float` first (`_to_float`, and
@@ -360,15 +368,19 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
   (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as
-  `report_review.html`), and two Chart.js bar charts fed by `GET
-  /api/statistics` — a stacked one for the grid/PV/battery/chargepoint kWh
-  split, a plain one for cost. Chart colors (`chartColors()`) are read
-  from the page's own CSS custom properties (`--text`/`--muted`/
-  `--border`) at chart-creation time so both themes render correctly —
-  picked once per `loadStatistics()` call, not live-updated on a theme
-  toggle mid-session (reload picks up the new theme; deliberately not
-  worth the added complexity of hooking into `_settings_modal.html`'s
-  shared toggle handler for a live re-render).
+  `report_review.html`, now four cards including a "PV-Eigenverbrauch"
+  percentage computed client-side from the period totals: `(pv + bat) /
+  energy`), two Chart.js bar charts fed by `GET /api/statistics` — a
+  stacked one for the grid/PV/battery/chargepoint kWh split, a plain one
+  for cost — and a "Nach Fahrzeug" table (from the same response's
+  `by_vehicle`) for comparing vehicles against each other rather than
+  only against time. Chart colors (`chartColors()`) are read from the
+  page's own CSS custom properties (`--text`/`--muted`/`--border`) at
+  chart-creation time so both themes render correctly — picked once per
+  `loadStatistics()` call, not live-updated on a theme toggle mid-session
+  (reload picks up the new theme; deliberately not worth the added
+  complexity of hooking into `_settings_modal.html`'s shared toggle
+  handler for a live re-render).
 
 Header navigation is consistent across pages: a `.brand`/`.brand-icon`
 wrapper puts the same inline lightning-bolt SVG (identical markup to the

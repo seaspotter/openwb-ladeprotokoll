@@ -174,7 +174,8 @@ kam — monatlich oder jährlich zusammengefasst.
 
 - **Filter** — optional nach Quelle und/oder Fahrzeug eingrenzen, sowie
   Monatlich/Jährlich wählen, dann "Laden".
-- **Summe** — Ladevorgänge, Energie und Kosten über den gesamten
+- **Summe** — Ladevorgänge, Energie, Kosten und PV-Eigenverbrauch (Anteil
+  von PV + Speicher an der Gesamtenergie, in %) über den gesamten
   angezeigten Zeitraum.
 - **Energiequellen (kWh)** — gestapeltes Balkendiagramm pro Zeitraum:
   Netz, PV, Speicher, Ladepunkt. Die Balken zeigen die tatsächlich
@@ -185,6 +186,9 @@ kam — monatlich oder jährlich zusammengefasst.
 - **Kosten** — Balkendiagramm pro Zeitraum, zeigt dieselbe "Kosten"-Größe
   wie überall sonst in der Anwendung (openWB-Wert oder korrigiert, je
   nach Berichts-Einstellungen → Kosten-Spalte zeigt).
+- **Nach Fahrzeug** — Tabelle mit Ladevorgängen, Energie, PV-Anteil und
+  Kosten je Fahrzeug (nicht nach Zeitraum), absteigend nach Energie
+  sortiert — zum Vergleichen mehrerer Fahrzeuge untereinander.
 
 ## Self-Update
 
