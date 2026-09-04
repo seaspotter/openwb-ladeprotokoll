@@ -34,7 +34,7 @@ passiert unter "Bericht erstellen".
 
 ## Einstellungen (⚙️)
 
-Ein Dialogfenster mit vier Bereichen, in dieser Reihenfolge:
+Ein Dialogfenster mit fünf Bereichen, in dieser Reihenfolge:
 
 ### Quellen
 
@@ -77,6 +77,15 @@ Kostenberechnung überprüft und ggf. korrigiert wird.
 - **Löschen** — entfernt den Preis-Eintrag dauerhaft; bereits erzeugte
   PDF-Berichte sind davon nicht betroffen, da sie den zum Zeitpunkt der
   Erzeugung verwendeten Preis eingefroren mitspeichern.
+
+### Fahrzeuge
+
+Listet jedes Fahrzeug auf, das in bereits abgerufenen Ladevorgängen
+vorkommt, mit einem Eingabefeld für das **Kennzeichen** und einem
+"Speichern"-Knopf pro Zeile. openWB selbst liefert kein Kennzeichen — das
+ist eine rein hier gepflegte Zusatzangabe, wird aber in jedem PDF-Bericht
+bei "Fahrzeug(e)" mit ausgegeben (z. B. "VW ID3 (AB-CD 123)"), sofern für
+das jeweilige Fahrzeug eines hinterlegt ist.
 
 ### Verlauf abrufen
 
@@ -124,7 +133,9 @@ Nicht vergessen: nach Änderungen unten **Speichern** klicken.
    speichern; beliebig oft wiederholbar.
 4. **Bericht erzeugen** — Titel eingeben (z. B. "August 2026") und
    erzeugen. Das PDF steht danach über den angezeigten Link sowie in
-   "Bisherige Berichte" zur Verfügung.
+   "Bisherige Berichte" zur Verfügung. Der Dateiname beim Herunterladen ist
+   das Erzeugungsdatum plus "Ladeprotokoll" plus der eingegebene Titel
+   (z. B. "20260901 Ladeprotokoll August 2026.pdf").
 
 Welche Spalten im PDF erscheinen, wird ausschließlich unter Einstellungen
 → Berichts-Einstellungen festgelegt (siehe oben).

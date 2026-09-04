@@ -3,8 +3,10 @@ entry CRUD, and report preview/generate/list/pdf. All reads/writes are
 plain parameterized SQL via asyncpg -- no ORM."""
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse, Response
@@ -61,6 +63,10 @@ class ReportBuildIn(BaseModel):
 
 class ReportGenerateIn(ReportBuildIn):
     title: str
+
+
+class VehicleIn(BaseModel):
+    license_plate: str | None = None
 
 
 def _source_row(r) -> dict:
@@ -318,6 +324,39 @@ async def api_sessions(
     return {"sessions": sessions}
 
 
+@router.get("/api/vehicles")
+async def api_list_vehicles():
+    """Every vehicle name ever seen across all sources' sessions, left-joined
+    with its optionally configured Kennzeichen -- openWB's own data has no
+    license-plate field, so this is purely user-entered metadata, documented
+    on generated reports (see _report_meta below)."""
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT s.vehicle_name, v.license_plate "
+        "FROM (SELECT DISTINCT vehicle_name FROM sessions WHERE vehicle_name IS NOT NULL) s "
+        "LEFT JOIN vehicles v ON v.vehicle_name = s.vehicle_name "
+        "ORDER BY s.vehicle_name"
+    )
+    return {
+        "vehicles": [
+            {"vehicle_name": r["vehicle_name"], "license_plate": r["license_plate"]} for r in rows
+        ]
+    }
+
+
+@router.put("/api/vehicles/{vehicle_name}")
+async def api_update_vehicle(vehicle_name: str, body: VehicleIn):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "INSERT INTO vehicles (vehicle_name, license_plate, updated_at) "
+        "VALUES ($1, $2, now()) "
+        "ON CONFLICT (vehicle_name) DO UPDATE SET license_plate = $2, updated_at = now() "
+        "RETURNING vehicle_name, license_plate",
+        vehicle_name, body.license_plate,
+    )
+    return {"vehicle_name": row["vehicle_name"], "license_plate": row["license_plate"]}
+
+
 @router.get("/api/report-columns")
 async def api_report_columns():
     """Ordered list of every column report_build.py can render, plus which
@@ -440,8 +479,17 @@ async def _report_meta(
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
+    vehicle_rows = await pool.fetch("SELECT vehicle_name, license_plate FROM vehicles")
+    plates_by_vehicle = {
+        r["vehicle_name"]: r["license_plate"] for r in vehicle_rows if r["license_plate"]
+    }
     begins = [r["time_begin"] for r in rows]
     source_names = {sources_by_id.get(r["source_id"], f"#{r['source_id']}") for r in rows}
+    vehicle_names = sorted({r["vehicle_name"] for r in rows if r["vehicle_name"]})
+    vehicle_display = [
+        f"{name} ({plates_by_vehicle[name]})" if plates_by_vehicle.get(name) else name
+        for name in vehicle_names
+    ]
     return ReportMeta(
         report_id=report_id,
         title=title,
@@ -449,10 +497,27 @@ async def _report_meta(
         period_from=min(begins).strftime("%d.%m.%Y") if begins else None,
         period_to=max(begins).strftime("%d.%m.%Y") if begins else None,
         source_names=sorted(source_names),
-        vehicle_names=sorted({r["vehicle_name"] for r in rows if r["vehicle_name"]}),
+        vehicle_names=vehicle_display,
         show_signature_line=settings["show_signature_line"],
         orientation=settings["orientation"],
     )
+
+
+def _pdf_filename(title: str, created_at: datetime) -> str:
+    """"20260904 Ladeprotokoll <title>.pdf" -- date prefix so files sort
+    chronologically wherever they're saved, since the user-given title alone
+    doesn't."""
+    safe_title = re.sub(r'[\\/:"*?<>|]+', "-", title).strip() or "Bericht"
+    return f"{created_at:%Y%m%d} Ladeprotokoll {safe_title}.pdf"
+
+
+def _content_disposition(filename: str) -> str:
+    """RFC 6266: a plain ASCII fallback filename plus an RFC 5987
+    filename*=UTF-8'' extended parameter so umlauts in the title (routine in
+    German vehicle/provider names) still show up correctly in browsers that
+    honor it, without breaking the ones that only read the plain parameter."""
+    ascii_fallback = filename.encode("ascii", "ignore").decode("ascii").strip() or "ladeprotokoll.pdf"
+    return f'inline; filename="{ascii_fallback}"; filename*=UTF-8\'\'{quote(filename)}'
 
 
 _REPORT_SUMMARY_SELECT = (
@@ -570,13 +635,16 @@ async def api_get_report(report_id: int):
 @router.get("/reports/{report_id}/pdf")
 async def api_get_report_pdf(report_id: int):
     pool = get_pool()
-    row = await pool.fetchrow("SELECT pdf_data FROM reports WHERE id = $1", report_id)
+    row = await pool.fetchrow(
+        "SELECT pdf_data, title, created_at FROM reports WHERE id = $1", report_id
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+    filename = _pdf_filename(row["title"], row["created_at"])
     return Response(
         content=bytes(row["pdf_data"]),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="ladeprotokoll-{report_id}.pdf"'},
+        headers={"Content-Disposition": _content_disposition(filename)},
     )
 
 

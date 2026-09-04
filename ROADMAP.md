@@ -90,6 +90,19 @@ open an issue or just start working if something here matters to you.
       never actually stayed hidden, because `.inline { display: flex }`
       beat the browser's own `[hidden]` rule on specificity.
 
+- [x] Third real-usage feedback round (same day, after a PDF header
+      screenshot and a direct "why doesn't this look like openwb-logger"
+      comparison): trimmed the PDF disclaimer to one sentence; widened the
+      gap between the PDF header's logo and title; added a "Fahrzeuge"
+      settings panel + `vehicles` table so a Kennzeichen (license plate)
+      can be recorded per vehicle name and shown in the PDF's "Fahrzeug(e)"
+      line; PDF downloads now get a date-prefixed filename
+      (`"<YYYYMMDD> Ladeprotokoll <title>.pdf"`); unified every button's
+      styling with openwb-logger's (flat, no `.primary` filled variant;
+      matching header/button padding and font-size) and switched the
+      settings/theme header icons from color emoji to the same plain SVG/
+      glyph markup openwb-logger and knxpilot use.
+
 ## Next
 
 - [ ] CSV export of the currently selected sessions, alongside the PDF

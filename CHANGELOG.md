@@ -6,7 +6,42 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- Vehicle Kennzeichen (license plate) documentation: a new "Fahrzeuge"
+  settings panel lists every vehicle name ever seen with an editable
+  Kennzeichen field (`vehicles` table, `GET /api/vehicles`, `PUT
+  /api/vehicles/{name}`) — openWB itself has no such field, this is purely
+  user-entered. A vehicle with a Kennzeichen set has it appended to the
+  PDF's "Fahrzeug(e)" line (e.g. "VW ID3 (AB-CD 123)").
+- The downloaded PDF's filename is now `"<YYYYMMDD> Ladeprotokoll
+  <title>.pdf"` (date-prefixed so files sort chronologically) instead of
+  the old `"ladeprotokoll-<id>.pdf"`.
+
 ### Changed
+- Third real-usage feedback round (2026-09-04, same day, after a PDF
+  header screenshot and a side-by-side comparison with openwb-logger):
+  - PDF disclaimer trimmed to one sentence — cut the redundant "changes to
+    the source data afterward don't affect this document" follow-up, which
+    just restated what "the document is immutable" already implies.
+  - More visual space between the PDF header's logo and "Ladeprotokoll"
+    title (`gap: 12px` -> `22px` on `header.doc-header`).
+  - Every button across `index.html`/`report_review.html`/
+    `_settings_modal.html` unified to the same flat, unfilled style — the
+    accent-colored `.primary` variant (used on "Jetzt abrufen", "Bericht
+    erstellen", "Bericht erzeugen", the report-settings "Speichern") is
+    gone; openwb-logger's header has no filled buttons at all, and this
+    project's own icon buttons (⚙️/🌙) were also color emoji next to
+    otherwise-flat controls, which read as visually inconsistent in a
+    side-by-side comparison. Header padding, `h1` font-size/letter-
+    spacing, and button/input padding now match openwb-logger's exact
+    pixel values.
+  - Settings/theme header icons switched from color emoji (⚙️/🌙/☀️, which
+    render as an inconsistently-shaped colored pill depending on the OS's
+    emoji font) to the same plain `currentColor` SVG/glyph markup as
+    openwb-logger and knxpilot (`&#9881;` gear entity, inline sun/moon
+    SVGs) — this incidentally fixed a latent bug where the theme icon
+    never actually updated on toggle, because the button was missing the
+    `id="theme-toggle"` the shared script looked up by.
 - Second real-usage feedback round (2026-09-04, same day, after reviewing
   an actual generated PDF and dashboard screenshots):
   - Einstellungen is now a `<dialog>` popup (new `app/templates/

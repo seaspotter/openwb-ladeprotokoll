@@ -20,7 +20,7 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 18px; border-bottom: 1px solid var(--border);
   }
-  .modal-header h2 { margin: 0; font-size: 16px; }
+  .modal-header h2 { margin: 0; font-size: 15px; }
   .modal-body { padding: 4px 18px 18px; overflow-y: auto; max-height: calc(88vh - 56px); }
   .modal-body .panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
@@ -46,7 +46,7 @@
   .modal-body input[type=number] { width: 90px; }
   .modal-body button {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+    border-radius: 6px; padding: 6px 8px; font-size: 13px; cursor: pointer;
   }
   .modal-body button:hover { border-color: var(--accent); }
   .modal-body button.danger:hover { border-color: var(--error); color: var(--error); }
@@ -54,7 +54,6 @@
     width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center;
     justify-content: center; font-size: 16px; line-height: 1;
   }
-  .modal-body button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .modal-body .muted { color: var(--muted); font-size: 12px; }
   .modal-body .columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; margin-bottom: 10px; }
   .modal-body label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
@@ -121,6 +120,18 @@
     </div>
 
     <div class="panel">
+      <h3>Fahrzeuge</h3>
+      <p class="hint">Kennzeichen je Fahrzeug -- wird im PDF-Bericht bei "Fahrzeug(e)" mit ausgegeben. openWB selbst liefert kein Kennzeichen, das ist rein hier gepflegte Zusatzangabe.</p>
+      <table id="vehicles-table">
+        <thead>
+          <tr><th>Fahrzeug</th><th>Kennzeichen</th><th></th></tr>
+        </thead>
+        <tbody id="vehicles-body"></tbody>
+      </table>
+      <p class="muted" id="vehicles-empty" hidden>Noch keine Fahrzeuge bekannt -- dafür muss zuerst mindestens ein Ladevorgang abgerufen worden sein.</p>
+    </div>
+
+    <div class="panel">
       <h3>Verlauf abrufen</h3>
       <p class="hint">Holt Ladeprotokolle für zurückliegende Monate nach — der automatische Abruf und "Jetzt abrufen" erfassen immer nur den aktuellen Monat.</p>
       <form class="inline" id="backfill-form">
@@ -152,7 +163,7 @@
           </select>
         </label>
         <label class="check"><input type="checkbox" id="show-signature-line"> Unterschriftzeile im PDF</label>
-        <button type="submit" class="primary">Speichern</button>
+        <button type="submit">Speichern</button>
       </form>
       <p class="muted" id="report-settings-result"></p>
     </div>
@@ -235,6 +246,22 @@ async function loadPrices() {
       <td>${p.valid_to || 'offen'}</td>
       <td>${p.notes || '–'}</td>
       <td><button data-action="delete-price" data-id="${p.id}" class="danger">Löschen</button></td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+async function loadVehicles() {
+  const { vehicles } = await api('/api/vehicles');
+  const body = document.getElementById('vehicles-body');
+  document.getElementById('vehicles-empty').hidden = vehicles.length > 0;
+  body.innerHTML = '';
+  for (const v of vehicles) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${v.vehicle_name}</td>
+      <td><input type="text" data-vehicle-plate="${v.vehicle_name}" value="${v.license_plate || ''}" placeholder="z.B. AB-CD 123"></td>
+      <td><button data-action="save-vehicle" data-vehicle="${v.vehicle_name}">Speichern</button></td>
     `;
     body.appendChild(tr);
   }
@@ -328,6 +355,25 @@ document.getElementById('backfill-form').addEventListener('submit', async (ev) =
   }
 });
 
+document.getElementById('vehicles-body').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button');
+  if (!btn || btn.dataset.action !== 'save-vehicle') return;
+  const name = btn.dataset.vehicle;
+  const input = document.querySelector(`input[data-vehicle-plate="${CSS.escape(name)}"]`);
+  btn.disabled = true;
+  try {
+    await api(`/api/vehicles/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license_plate: input.value.trim() || null }),
+    });
+  } catch (err) {
+    alert('Speichern fehlgeschlagen: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('prices-body').addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button');
   if (!btn || btn.dataset.action !== 'delete-price') return;
@@ -397,6 +443,7 @@ document.querySelectorAll('[data-open-settings]').forEach((btn) => {
       settingsLoaded = true;
       await loadSources();
       await loadPrices();
+      await loadVehicles();
       await loadReportSettings();
     }
     settingsModal.showModal();
@@ -411,9 +458,19 @@ function currentTheme() {
     || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 }
 
+// Same SVG icon markup as this author's other projects (openwb-logger,
+// knxpilot) -- a color emoji glyph (🌙/☀️) renders as an odd, inconsistently
+// shaped pill depending on the OS/browser emoji font, unlike these plain
+// `currentColor` outlines which always match the rest of the toolbar.
+const SUN_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/>' +
+  '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const MOON_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
+  '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>';
+
 function updateThemeIcon() {
   const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+  if (btn) btn.innerHTML = currentTheme() === 'dark' ? MOON_ICON : SUN_ICON;
 }
 
 document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {

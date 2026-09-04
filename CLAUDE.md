@@ -31,9 +31,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   the `sources` table and added/edited from the web UI.
 - `app/db.py` — asyncpg pool, idempotent schema bootstrap (`CREATE TABLE
   IF NOT EXISTS`, no migration tool). Full schema for `sources`,
-  `sessions`, `price_entries`, `reports`, `report_sessions` already lives
-  here — see the module for the natural-key and audit-snapshot reasoning
-  inline.
+  `sessions`, `price_entries`, `reports`, `report_sessions`,
+  `report_settings`, `vehicles` already lives here — see the module for
+  the natural-key and audit-snapshot reasoning inline. `vehicles`
+  (`vehicle_name` PK, `license_plate`) is purely user-entered metadata —
+  openWB's own charge-log JSON has no Kennzeichen field at all — so it's
+  a plain new `CREATE TABLE`, no additive `ALTER` needed.
 - `app/sources.py` — **pure**: `Source` dataclass plus `base_url`
   validation/normalization (bare IP, host:port, or full URL, all
   normalized to `scheme://host[:port]` with no trailing slash). Unit
@@ -125,17 +128,28 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   from real reports, don't collapse it back to a hardcoded default. The footer
   (disclaimer + optional signature line, `ReportMeta.show_signature_line`)
   has `page-break-inside: avoid` — without it, WeasyPrint can push just the
-  signature line onto its own near-blank trailing page. The document
-  deliberately never displays its own `report_id` — only the user-given
-  `title` — per user feedback that a bare "Bericht 3" was meaningless; the
-  id still drives the PDF's filename/URL behind the scenes.
+  signature line onto its own near-blank trailing page; the disclaimer
+  itself is intentionally one sentence only (the redundant "changes to the
+  source data afterward don't affect this already-generated document"
+  follow-up sentence was cut per user feedback — the document being
+  immutable is already true and doesn't need spelling out twice). The
+  header's logo-to-title gap is `gap: 22px` on `header.doc-header`, not a
+  tight default — a user screenshot showed the two crowded together at a
+  smaller value. The document deliberately never displays its own
+  `report_id` — only the user-given `title` — per user feedback that a bare
+  "Bericht 3" was meaningless; the id still drives the PDF's filename/URL
+  behind the scenes. `ReportMeta.vehicle_names` (`web.py`'s `_report_meta`)
+  is already-formatted display strings, not bare names — each vehicle with
+  a `vehicles.license_plate` set is rendered `"<name> (<plate>)"` in the
+  "Fahrzeug(e)" meta line, so the Kennzeichen ends up documented on every
+  report without needing its own column.
 - `app/web.py` — FastAPI routes for source CRUD, fetch triggers, price
-  entry CRUD (including price-entry `notes`), report-settings, session
-  listing (enriched with each session's matched price decision; filterable
-  by source/vehicle/**chargepoint**/date), and report preview/generate/
-  list/pdf/delete. Plain parameterized SQL via asyncpg, no ORM. asyncpg
-  returns `NUMERIC` columns as `Decimal`; anything feeding
-  `price_entries.py`/`report_build.py` converts to `float` first
+  entry CRUD (including price-entry `notes`), vehicle Kennzeichen CRUD,
+  report-settings, session listing (enriched with each session's matched
+  price decision; filterable by source/vehicle/**chargepoint**/date), and
+  report preview/generate/list/pdf/delete. Plain parameterized SQL via
+  asyncpg, no ORM. asyncpg returns `NUMERIC` columns as `Decimal`; anything
+  feeding `price_entries.py`/`report_build.py` converts to `float` first
   (`_to_float`), since those modules are written and tested against plain
   floats. A generated report is built in two DB steps: insert the
   `reports` row first (to get a real id, needed for the PDF's
@@ -146,6 +160,21 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   all-columns fallback) is what "no columns specified" actually falls back
   to, so an API caller that omits `columns` gets the user's configured
   default, not every column.
+  `GET /api/vehicles` returns every vehicle name ever seen across all
+  sources' sessions (`SELECT DISTINCT ... FROM sessions`), left-joined with
+  its optional `vehicles.license_plate` — not just the rows that happen to
+  have a plate set, so the settings UI can always show an input for every
+  known vehicle. `PUT /api/vehicles/{vehicle_name}` upserts
+  (`ON CONFLICT (vehicle_name) DO UPDATE`); a `null` `license_plate`
+  clears it, there's no separate delete route.
+  `GET /reports/{id}/pdf`'s filename is `"<YYYYMMDD> Ladeprotokoll
+  <title>.pdf"` (`_pdf_filename`, date-prefixed so files sort
+  chronologically wherever they're saved) via
+  `Content-Disposition: ...; filename="..."; filename*=UTF-8''...`
+  (`_content_disposition`, RFC 6266) — the extended `filename*` parameter
+  carries the real UTF-8 title (German titles routinely have umlauts), the
+  plain `filename` is an ASCII-only fallback for user agents that don't
+  read the extended one.
 - `app/updater.py` — optional in-app self-update (`git pull` + process
   restart), identical pattern to `openwb-logger/app/updater.py`. Works
   because `docker-compose.yml` bind-mounts the repo onto the container's
@@ -170,14 +199,34 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `<script>` (load-order matters: the partial's `<script>` defines the
   shared `api()` helper and `loadSources()`/`loadPrices()`/
   `loadReportSettings()` that the host page's own script calls, so it must
-  come first in document order). Opened via a `⚙️` button
-  (`[data-open-settings]`) in each page's header; a `🌙`/`☀️` button
-  (`[data-theme-toggle]`) next to it is an explicit light/dark override on
-  top of the CSS `prefers-color-scheme` default, persisted in
-  `localStorage` (each page also has a tiny inline script at the top of
-  `<body>` that applies a stored theme before first paint, to avoid a
-  flash). Panel order is Quellen, Preise, Verlauf abrufen, Berichts-
-  Einstellungen (this exact order was requested explicitly — don't
+  come first in document order). Opened via a gear button
+  (`[data-open-settings]`, `&#9881;` glyph) in each page's header; a
+  sun/moon button (`[data-theme-toggle]`, `id="theme-toggle"`) next to it
+  is an explicit light/dark override on top of the CSS
+  `prefers-color-scheme` default, persisted in `localStorage` (each page
+  also has a tiny inline script at the top of `<body>` that applies a
+  stored theme before first paint, to avoid a flash). Both icon buttons use
+  the exact same plain `currentColor` SVG/glyph markup as this author's
+  other projects (openwb-logger, knxpilot) — `updateThemeIcon()` sets
+  `#theme-toggle`'s `innerHTML` to inline `SUN_ICON`/`MOON_ICON` SVG
+  constants, not a color emoji (🌙/☀️ render as an inconsistently-shaped
+  colored pill depending on the OS's emoji font, which is why an earlier
+  version looked visually "off" next to the rest of the flat toolbar in a
+  user screenshot). No button anywhere in this app (including
+  `index.html`'s "Jetzt abrufen"/"Bericht erstellen" and
+  `report_review.html`'s "Bericht erzeugen") uses a filled/accent
+  `.primary` style any more — every button is the same flat
+  `background: var(--panel)` outline, matching openwb-logger's header
+  exactly (it has no filled buttons at all); this was a deliberate
+  unification after the user asked twice to match that project's look.
+  Header `padding`/`h1` font-size, and every button/input's padding, were
+  also pulled to match openwb-logger's exact pixel values (`10px 16px`
+  header padding, `17px` h1 with `letter-spacing: -0.01em`, `6px 8px`
+  control padding) for the same reason — check openwb-logger's own
+  `index.html` `<style>` before changing these again, don't just pick new
+  numbers. Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
+  Berichts-Einstellungen (Fahrzeuge added between Preise and Verlauf
+  abrufen since both Preise and Fahrzeuge key off vehicle names — don't
   reorder without reason). Source/price entry add-forms are collapsed
   behind a "+" icon button per panel, toggled via `el.hidden = !el.hidden`
   — **the modal's own `<style>` includes `[hidden] { display: none
@@ -187,7 +236,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   regardless of the `hidden` attribute; this was a real shipped bug,
   caught from a screenshot showing the form always open. Price entries
   have a `notes` field here (form + table column) — an unlabeled
-  provider+date-range row is meaningless months later. "Berichts-
+  provider+date-range row is meaningless months later. The "Fahrzeuge"
+  panel (`loadVehicles()`, `GET /api/vehicles`, `PUT
+  /api/vehicles/{name}`) lists every vehicle name ever seen with an
+  editable Kennzeichen input and a per-row "Speichern" button — a small
+  enough list (one row per vehicle, not per session) that per-row save
+  beats trying to track which rows changed for one bulk save. "Berichts-
   Einstellungen" (`GET/PUT /api/report-settings`) is the **only** place
   PDF columns are chosen — `report_review.html` used to have its own
   second column checklist too, which was confusing (two places to set
@@ -207,11 +261,11 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 
 Header navigation is consistent across pages: a secondary "back" link on
 the left where relevant (`← Übersicht`; `index.html` has none, it *is*
-"back"), the `⚙️`/theme icon pair on the right, and (`index.html` only)
-"Jetzt abrufen" plus the one primary (`.primary`, accent-colored)
-next-step action for that page — `Bericht erstellen →` from `index.html`;
-`report_review.html`'s own in-page "Bericht erzeugen" button is the
-primary action there instead.
+"back"), the gear/theme icon pair on the right, and (`index.html` only)
+"Jetzt abrufen" plus "Bericht erstellen →" — both plain flat buttons like
+everything else, no accent-filled "primary" style (see
+`_settings_modal.html` above); `report_review.html`'s own in-page "Bericht
+erzeugen" button is styled the same way.
 - An MCP endpoint — deliberately deferred past v1, see `ROADMAP.md`.
 
 Storage is Postgres only. Reports, once generated, are immutable — the

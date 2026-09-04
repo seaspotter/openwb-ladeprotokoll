@@ -184,6 +184,17 @@ _SCHEMA_STATEMENTS = [
     # DEFAULT backfills any existing row.
     "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS orientation TEXT "
     "NOT NULL DEFAULT 'portrait';",
+    # User-entered metadata keyed by vehicle_name, the only vehicle identity
+    # this app has (openWB's own charge-log JSON has no license-plate field
+    # at all) -- purely for documenting the Kennzeichen on generated reports,
+    # not fetched or validated against anything.
+    """
+    CREATE TABLE IF NOT EXISTS vehicles (
+        vehicle_name TEXT PRIMARY KEY,
+        license_plate TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    """,
 ]
 
 
