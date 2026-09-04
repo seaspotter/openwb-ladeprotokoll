@@ -6,7 +6,16 @@
      this, the add-source/add-price forms below stayed visible even before
      the "+" button was ever clicked. */
   [hidden] { display: none !important; }
-  dialog#settings-modal {
+  /* [open] here matters, not just style: the UA stylesheet hides a
+     <dialog> via `dialog:not([open]) { display: none }`, and an
+     unqualified `dialog#settings-modal { display: flex }` (ID selector)
+     outranks that on specificity -- forcing display:flex even while
+     closed, so .close() removed the open/modal/backdrop state but the
+     panel stayed visibly stuck on the page. Same category of bug as the
+     `[hidden]` note below, just the <dialog> version of it -- this was a
+     real shipped regression, caught from a user report of "can't close
+     the settings window" right after the flex-column scrollbar fix. */
+  dialog#settings-modal[open] {
     width: min(760px, 92vw);
     max-height: 88vh;
     border: 1px solid var(--border);

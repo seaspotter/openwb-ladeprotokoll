@@ -29,6 +29,13 @@ what that means in practice for this project.
   the old `"ladeprotokoll-<id>.pdf"`.
 
 ### Fixed
+- Settings modal couldn't be closed: the double-scrollbar fix below added
+  an unqualified `dialog#settings-modal { display: flex }` rule, which
+  (ID selector) outranks the browser's own `dialog:not([open]) { display:
+  none }` UA rule on specificity — so clicking "×" still called
+  `.close()` correctly, but the panel stayed visibly stuck on the page
+  instead of disappearing. Scoped the rule to `dialog#settings-modal[open]`
+  so it only applies while actually open.
 - Settings modal showed two nested scrollbars once its content overflowed
   (`dialog#settings-modal` had a `max-height` but no `overflow: hidden`,
   and `.modal-body`'s own scroll area was a hardcoded `calc(88vh - 56px)`
