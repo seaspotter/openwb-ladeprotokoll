@@ -330,6 +330,7 @@ async def _query_sessions(
     # for a large session list.
     price_rows = await pool.fetch("SELECT * FROM price_entries")
     entries = [_price_entry_for_matching(r) for r in price_rows]
+    settings = await get_report_settings(pool)
 
     sessions = []
     for r in rows:
@@ -344,6 +345,12 @@ async def _query_sessions(
             session_date=r["time_begin"].date(),
             energy_kwh=energy_kwh,
             cost_openwb=cost_openwb,
+            power_source_grid_pct=_to_float(r["power_source_grid_pct"]),
+            power_source_pv_pct=_to_float(r["power_source_pv_pct"]),
+            power_source_bat_pct=_to_float(r["power_source_bat_pct"]),
+            power_source_cp_pct=_to_float(r["power_source_cp_pct"]),
+            pv_price_per_kwh=settings["pv_price_per_kwh"],
+            bat_price_per_kwh=settings["bat_price_per_kwh"],
         )
         # asyncpg returns NUMERIC as Decimal -- these fields go out as
         # plain JSON numbers over HTTP either way, but statistics.py's
@@ -491,16 +498,32 @@ def _jsonable(value):
     return value
 
 
-def _resolve_price_decision(row, entries_list, entries_by_id, override):
+def _resolve_price_decision(
+    row, entries_list, entries_by_id, override, pv_price_per_kwh, bat_price_per_kwh
+):
     energy_kwh = _to_float(row["energy_kwh"])
     cost_openwb = _to_float(row["cost_openwb"])
+    power_source_kwargs = {
+        "power_source_grid_pct": _to_float(row["power_source_grid_pct"]),
+        "power_source_pv_pct": _to_float(row["power_source_pv_pct"]),
+        "power_source_bat_pct": _to_float(row["power_source_bat_pct"]),
+        "power_source_cp_pct": _to_float(row["power_source_cp_pct"]),
+        "pv_price_per_kwh": pv_price_per_kwh,
+        "bat_price_per_kwh": bat_price_per_kwh,
+    }
     if override == "openwb":
-        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None)
+        return decide_price(
+            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None,
+            **power_source_kwargs,
+        )
     if override is not None:
         entry = entries_by_id.get(int(override))
         if entry is None:
             raise HTTPException(status_code=400, detail=f"Unbekannter Preis-Override: {override}")
-        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry)
+        return decide_price(
+            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry,
+            **power_source_kwargs,
+        )
     return match_and_decide(
         entries_list,
         source_id=row["source_id"],
@@ -508,6 +531,7 @@ def _resolve_price_decision(row, entries_list, entries_by_id, override):
         session_date=row["time_begin"].date(),
         energy_kwh=energy_kwh,
         cost_openwb=cost_openwb,
+        **power_source_kwargs,
     )
 
 
@@ -529,12 +553,16 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 
     price_rows = await pool.fetch("SELECT * FROM price_entries")
     entries_list = [_price_entry_for_matching(r) for r in price_rows]
+    settings = await get_report_settings(pool)
     entries_by_id = {e["id"]: e for e in entries_list}
 
     sessions = []
     for r in ordered_rows:
         override = price_overrides.get(r["id"]) if price_overrides else None
-        decision = _resolve_price_decision(r, entries_list, entries_by_id, override)
+        decision = _resolve_price_decision(
+            r, entries_list, entries_by_id, override,
+            settings["pv_price_per_kwh"], settings["bat_price_per_kwh"],
+        )
         sessions.append({
             "id": r["id"],
             "time_begin": r["time_begin"],

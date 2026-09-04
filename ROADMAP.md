@@ -138,6 +138,18 @@ open an issue or just start working if something here matters to you.
       day — `report_build.COST_BASES` stays exactly
       `("openwb", "corrected")`, don't reintroduce a third value without
       being asked again.
+- [x] Corrected cost splits a session by its actual grid/PV/battery mix
+      instead of applying one flat rate to the total kWh
+      (`price_entries.corrected_cost`) — the matched `price_entries` row
+      still only prices the grid share; two new global settings,
+      "PV-Preis"/"Batterie-Preis" (`report_settings.pv_price_per_kwh`/
+      `bat_price_per_kwh`, Berichts-Einstellungen), price the rest. Not
+      the same idea as the grid-only cost basis above (that added a third
+      *cost_basis value* and was rejected); this changes what "korrigiert"
+      itself computes, still producing one cost figure. Raised 2026-09-04
+      after the user pointed out that a single flat corrected rate can't
+      reflect openWB's own per-source pricing once it's configured
+      differently there.
 
 ## Next
 

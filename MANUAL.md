@@ -76,7 +76,13 @@ Zeitzone des Containers, nicht zwingend die des Browsers.
 ### Preise
 
 Ein Preis-Eintrag legt fest, mit welchem Strompreis openWBs eigene
-Kostenberechnung überprüft und ggf. korrigiert wird.
+Kostenberechnung überprüft und ggf. korrigiert wird. Dieser Preis gilt nur
+für den aus dem **Netz** bezogenen Anteil eines Ladevorgangs — der
+PV- und Batterie-Anteil wird separat bepreist, siehe "PV-Preis"/
+"Batterie-Preis" unter "Berichts-Einstellungen" weiter unten. Ein
+Ladevorgang mit z. B. 60 % Netz, 30 % PV und 10 % Speicher wird also aus
+drei Anteilen zusammengesetzt, nicht mit einem einzigen Preis für die
+gesamte geladene Energie.
 
 - **Preis hinzufügen** — über das "+" neben "Preise" öffnet sich das
   Formular: Anbieter, Preis pro kWh, sowie optional eine Quelle und/oder
@@ -125,6 +131,12 @@ Auswahl mehr:
   eine "Kosten"-Spalte im PDF, keine zwei nebeneinander. Lässt sich pro
   Bericht in "Bericht erstellen" noch einmal bewusst übersteuern (siehe
   unten) — dieser Wert hier ist nur die Vorbelegung.
+- **PV-Preis** / **Batterie-Preis** (€/kWh) — die zwei globalen Preise für
+  den PV- bzw. Speicher-Anteil eines Ladevorgangs (siehe "Preise" oben);
+  Standard jeweils 0. Anders als die übrigen Felder auf dieser Seite gelten
+  diese beiden **sofort überall**, nicht erst für künftig erzeugte
+  Berichte — sie fließen unmittelbar in die korrigierten Kosten in der
+  Übersicht, der Statistik und neuen Berichten ein.
 - **Ausrichtung** — Hochkant (Standard) oder Querformat. Bei vielen
   ausgewählten Spalten passt Hochkant u. U. nicht mehr sauber auf eine
   Seite — dann Querformat wählen.

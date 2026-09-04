@@ -7,6 +7,17 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Added
+- Corrected cost now prices a session's actual energy mix instead of one
+  flat rate over its total kWh: the grid-sourced share still uses the
+  matched/overridden `price_entries` rate, and two new global settings,
+  "PV-Preis" and "Batterie-Preis" (EUR/kWh, default 0, Berichts-
+  Einstellungen), price the PV- and battery-sourced shares
+  (`price_entries.corrected_cost`, `report_settings.pv_price_per_kwh`/
+  `bat_price_per_kwh`). Applies everywhere a price decision is resolved --
+  Übersicht, Bericht erstellen, Statistik, and generated reports -- the
+  moment the two rates are saved, not just for future reports. A session
+  with no recorded energy-source split (predating this feature) still
+  defaults to 100% grid, matching the old flat-rate behavior exactly.
 - MCP server at `/mcp` (`app/mcp_server.py`, `FastMCP`, Streamable HTTP
   transport, same pattern as the sibling `openwb-logger` project):
   `search_sessions` (source/vehicle/chargepoint/date filters, same price-

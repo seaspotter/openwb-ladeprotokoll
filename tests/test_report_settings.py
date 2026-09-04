@@ -60,3 +60,29 @@ def test_validate_valid_orientation():
 def test_validate_unknown_orientation_raises():
     with pytest.raises(ReportSettingsError):
         validate({"orientation": "sideways"})
+
+
+def test_validate_valid_pv_bat_price():
+    patch = {"pv_price_per_kwh": 0.12, "bat_price_per_kwh": 0.20}
+    assert validate(patch) == patch
+    assert validate({"pv_price_per_kwh": 0}) == {"pv_price_per_kwh": 0}
+
+
+def test_validate_negative_pv_price_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"pv_price_per_kwh": -0.01})
+
+
+def test_validate_negative_bat_price_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"bat_price_per_kwh": -0.01})
+
+
+def test_validate_non_numeric_pv_price_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"pv_price_per_kwh": "cheap"})
+
+
+def test_validate_bool_pv_price_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"pv_price_per_kwh": True})

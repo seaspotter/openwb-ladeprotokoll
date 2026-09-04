@@ -186,6 +186,14 @@ _SCHEMA_STATEMENTS = [
         cost_basis TEXT NOT NULL,
         show_signature_line BOOLEAN NOT NULL,
         orientation TEXT NOT NULL DEFAULT 'portrait',
+        -- Global EUR/kWh rates for PV- and battery-sourced energy, used by
+        -- price_entries.corrected_cost alongside a session's matched (or
+        -- overridden) price_entries row, which only ever covers the
+        -- grid-sourced share -- see price_entries.py's module docstring.
+        -- Not scoped by source/vehicle/date like price_entries, since a
+        -- self-produced kWh's cost doesn't vary by tariff period.
+        pv_price_per_kwh NUMERIC NOT NULL DEFAULT 0,
+        bat_price_per_kwh NUMERIC NOT NULL DEFAULT 0,
         CHECK (id = 1)
     );
     """,
@@ -195,6 +203,10 @@ _SCHEMA_STATEMENTS = [
     # DEFAULT backfills any existing row.
     "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS orientation TEXT "
     "NOT NULL DEFAULT 'portrait';",
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS pv_price_per_kwh "
+    "NUMERIC NOT NULL DEFAULT 0;",
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS bat_price_per_kwh "
+    "NUMERIC NOT NULL DEFAULT 0;",
     # User-entered metadata keyed by vehicle_name, the only vehicle identity
     # this app has (openWB's own charge-log JSON has no license-plate field
     # at all) -- purely for documenting the Kennzeichen on generated reports,

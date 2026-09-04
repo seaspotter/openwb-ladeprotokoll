@@ -112,8 +112,31 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   back to openWB's own when no entry applies), and whether the delta
   exceeds `DELTA_FLAG_THRESHOLD` (0.01). Always prices `energy_kwh`
   (per-row), never `energy_since_plugged_kwh` (cumulative) — see
-  `chargelog_parse.py`'s docstring for why that distinction matters. Unit
-  tested.
+  `chargelog_parse.py`'s docstring for why that distinction matters.
+  `corrected_cost` splits a session's energy by source rather than
+  applying one flat rate to the total: the matched price entry's own
+  `price_per_kwh` only ever prices the **grid**-sourced share
+  (`power_source_grid_pct`); the PV- and battery-sourced shares
+  (`power_source_pv_pct`/`power_source_bat_pct`) are priced at
+  `report_settings.pv_price_per_kwh`/`bat_price_per_kwh` instead — two
+  global EUR/kWh rates, not scoped by source/vehicle/date like
+  `price_entries` rows, since a self-produced kWh's cost doesn't vary by
+  tariff period. Added 2026-09-04 after the user pointed out a flat rate
+  over total `energy_kwh` doesn't reflect openWB's own per-source pricing
+  once they'd configured different rates there themselves; a smaller,
+  more targeted change than the "grid-only" cost basis tried and rejected
+  earlier the same day (see `report_build.py`'s note) — this one still
+  produces a single "korrigiert" figure, just computed from the session's
+  actual mix instead of one rate. `power_source.cp` (chargepoint-sourced
+  energy — rare, effectively always 0 in every real record seen so far)
+  is folded into the battery rate rather than getting a third global
+  price, since it represents local storage rather than a grid draw. When
+  every `power_source_*_pct` is `None` (a session predating this split,
+  or a data source that never populates it), the whole session defaults
+  to 100% grid — the same flat-rate result this function always had, and
+  the conservative choice when the real mix is unknown (it never invents
+  a PV/battery discount that may not have applied). Unit tested,
+  including the split-pricing and unknown-split-defaults-to-grid cases.
 - `app/report_build.py` — **pure**: sessions + a selected column list +
   a `cost_basis` ("openwb" or "corrected") + each session's resolved price
   decision -> the `ReportData` structure (formatted display cells,
@@ -134,8 +157,11 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/report_settings.py` — thin: a single-row `report_settings` table
   (id=1, `CHECK`-enforced) holding `default_columns` (the *only* column
   selection — see `_settings_modal.html`), `cost_basis`, `orientation`
-  ("portrait"/"landscape"), and `show_signature_line` — edited from
-  Einstellungen's "Berichts-Einstellungen" panel via `GET/PUT
+  ("portrait"/"landscape"), `show_signature_line`, and
+  `pv_price_per_kwh`/`bat_price_per_kwh` (both `>= 0`, default `0`, the
+  two global rates `price_entries.corrected_cost` uses for a session's
+  PV-/battery-sourced energy share — see that module's note) — edited
+  from Einstellungen's "Berichts-Einstellungen" panel via `GET/PUT
   /api/report-settings`. `validate()` is pure and unit tested;
   `get_settings`/`update_settings` do the DB round trip (upsert-on-first-
   read, so there's no separate seeding step) — verified with an
@@ -211,8 +237,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   report-settings, app-settings (`GET/PUT /api/app-settings`, the same raw
   `patch: dict` + `validate()`-raises-400 pattern as report-settings, not
   a pydantic model — needed since it's a partial update of two unrelated
-  fields), session listing (enriched with each session's matched
-  price decision; filterable by source/vehicle/**chargepoint**/date),
+  fields), session listing (enriched with each session's matched price
+  decision, computed via `match_and_decide`/`decide_price` with the
+  session's own `power_source_*_pct` fields plus `report_settings`'s
+  `pv_price_per_kwh`/`bat_price_per_kwh` threaded through so the split-
+  pricing correction applies everywhere a price decision is resolved, not
+  just at report generation; filterable by source/vehicle/**chargepoint**/
+  date),
   `GET /api/statistics` (`statistics.py`'s `aggregate()` *and*
   `aggregate_by_vehicle()` over the same `_query_sessions`-fetched
   sessions in one call — no second DB round trip for the by-vehicle
@@ -388,7 +419,16 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   Einstellungen" (`GET/PUT /api/report-settings`) is the **only** place
   PDF columns are chosen — `report_review.html` used to have its own
   second column checklist too, which was confusing (two places to set
-  the same thing) and is gone; see `report_settings.py`.
+  the same thing) and is gone; see `report_settings.py`. That same panel
+  also has the "PV-Preis"/"Batterie-Preis" (€/kWh) inputs, saved by the
+  same form/submit handler as the other report settings — placed here
+  rather than in the "Preise" panel because they live in the
+  `report_settings` table, not `price_entries` (they're global, not
+  scoped by source/vehicle/date the way a price entry is); the panel's
+  hint text says explicitly that these two fields are the exception to
+  "only affects new reports" — they change the corrected cost everywhere
+  (Übersicht, Statistik, new reports) the moment they're saved, unlike
+  every other field in this panel.
 - `app/templates/report_review.html` — session/price-override selection UI
   (`/report-review`): filters (source/vehicle/chargepoint/date, same
   dropdown-not-free-text pattern as `index.html`) load sessions via
