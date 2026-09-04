@@ -28,13 +28,6 @@ what that means in practice for this project.
   `statistik.html`) now show the lightning-bolt brand icon next to
   "openWB Ladeprotokoll", matching the favicon and the PDF header -- it
   was missing from the actual web UI this whole time.
-- The overview page (`/`) gained a "Kosten (Netzbezug)" column: the same
-  hinterlegte price, but applied only to a session's grid-imported share
-  of energy rather than the total -- purely informational, for a quick
-  at-a-glance comparison. Deliberately scoped to this one page only (not
-  `report_review.html`, not the PDF, no filtering/export) -- a fuller
-  per-report "Kostenbasis" version of this idea was built and then
-  explicitly reverted the same day per user feedback.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI

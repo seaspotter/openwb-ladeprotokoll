@@ -46,14 +46,6 @@ class PriceDecision:
     cost_openwb: float | None
     cost_corrected: float | None
     cost_used: float | None
-    # Same price entry, but priced against only the grid-imported share of
-    # energy_kwh (session's own power_source_grid_pct) instead of the full
-    # amount -- purely informational, shown as its own column on the
-    # read-only overview (index.html) only; does not feed report
-    # generation or any other cost figure. Always computed alongside the
-    # total-energy figures above, not behind a flag.
-    cost_corrected_grid_only: float | None
-    cost_used_grid_only: float | None
     delta: float | None
     delta_flagged: bool
 
@@ -114,34 +106,17 @@ def decide_price(
     energy_kwh: float | None,
     cost_openwb: float | None,
     price_entry: PriceEntry | None,
-    grid_pct: float | None = None,
 ) -> PriceDecision:
     """Combines an (already matched or user-overridden) price entry with a
     session's own energy/cost figures into the decision the review UI and
     report_build.py need: the corrected cost (or None if no entry
     applies), which cost to actually use on the report (corrected, falling
     back to openWB's own when there's no entry), and whether the two
-    diverge enough to flag.
-
-    `grid_pct` is the session's own power_source_grid_pct (0-100) --
-    used only for the informational cost_corrected_grid_only/
-    cost_used_grid_only figures (see PriceDecision), not for `cost_used`
-    itself. Missing data (`grid_pct is None`) is treated as 100% grid
-    rather than silently undercounting."""
+    diverge enough to flag."""
     cost_corrected = (
         corrected_cost(energy_kwh, price_entry["price_per_kwh"]) if price_entry else None
     )
     cost_used = cost_corrected if cost_corrected is not None else cost_openwb
-
-    grid_share = (grid_pct if grid_pct is not None else 100.0) / 100.0
-    grid_energy_kwh = energy_kwh * grid_share if energy_kwh is not None else None
-    cost_corrected_grid_only = (
-        corrected_cost(grid_energy_kwh, price_entry["price_per_kwh"]) if price_entry else None
-    )
-    cost_used_grid_only = (
-        cost_corrected_grid_only if cost_corrected_grid_only is not None else cost_openwb
-    )
-
     delta = (
         cost_corrected - cost_openwb
         if cost_corrected is not None and cost_openwb is not None
@@ -153,8 +128,6 @@ def decide_price(
         cost_openwb=cost_openwb,
         cost_corrected=cost_corrected,
         cost_used=cost_used,
-        cost_corrected_grid_only=cost_corrected_grid_only,
-        cost_used_grid_only=cost_used_grid_only,
         delta=delta,
         delta_flagged=delta_flagged,
     )
@@ -168,13 +141,10 @@ def match_and_decide(
     session_date: date,
     energy_kwh: float | None,
     cost_openwb: float | None,
-    grid_pct: float | None = None,
 ) -> PriceDecision:
     """Convenience wrapper for the common (no manual override) case: match,
     then decide."""
     entry = match_price_entry(
         entries, source_id=source_id, vehicle_name=vehicle_name, session_date=session_date
     )
-    return decide_price(
-        energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry, grid_pct=grid_pct
-    )
+    return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry)

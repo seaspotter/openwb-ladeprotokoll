@@ -31,12 +31,6 @@ ab, sind beide Spalten rot hervorgehoben. Diese Hervorhebung dient nur der
 Prüfung hier und unter "Bericht erstellen" — im fertigen PDF selbst
 erscheint die Kosten-Spalte immer neutral, ohne rote Markierung.
 
-Zusätzlich steht hier — nur auf dieser Seite, nicht unter "Bericht
-erstellen" und nicht im PDF — "Kosten (Netzbezug)": derselbe hinterlegte
-Preis, aber nur auf den Netzbezug-Anteil der Energie angewendet (nicht
-auf PV-/Speicher-Anteil). Rein informativ zum schnellen Blick, ohne
-Filter- oder Export-Möglichkeit.
-
 Unter dem Filter steht "Letzter Abruf: ..." mit Datum/Uhrzeit des
 zuletzt (automatisch oder manuell) erfolgreich abgerufenen Ladeprotokolls
 über alle Quellen hinweg — so lässt sich auf einen Blick erkennen, ob die

@@ -128,15 +128,6 @@ open an issue or just start working if something here matters to you.
       (`app/static/chart.umd.min.js`) rather than CDN-loaded, since this
       app otherwise has zero external network dependencies anywhere and
       should keep working on a fully offline LAN.
-- [x] Overview page gained a purely informational "Kosten (Netzbezug)"
-      column — the hinterlegte price applied only to a session's
-      grid-imported energy share (`price_entries.py`'s
-      `cost_used_grid_only`), not the total. Scoped to this one page only
-      (no `report_review.html` column, no PDF involvement, no
-      filter/export) after a fuller per-report "Kostenbasis" version was
-      built and then explicitly reverted the same day — see git history
-      around 2026-09-04 if that fuller version is ever wanted again;
-      don't rebuild it from scratch blind.
 
 ## Next
 
@@ -145,17 +136,12 @@ Nothing queued right now — see "Someday / maybe" below.
 ## Someday / maybe
 
 - [ ] Multi-currency support, if this is ever useful outside Germany/EUR.
-- [x] ~~Dynamische Stromtarife~~ — investigated and closed, not building
-      this: the charge-log gives exactly one row per session (one
-      `time_begin`/`time_end`/`energy_kwh`), no intra-session time-of-use
-      breakdown, so there's no way to know how many kWh happened during
-      which price-hour from this data at all — only openWB's own
-      real-time control loop has that resolution, which is presumably
-      already folded into `data.costs`/`cost_openwb`. A dynamic-tariff
-      user should use `cost_basis = "openwb"` for that vehicle/source and
-      skip this app's flat-€/kWh price-entry correction for it, rather
-      than this app trying to approximate hourly pricing it structurally
-      cannot see. Concluded with the user 2026-09-04 — this conclusion
-      doesn't depend on the grid-only-pricing idea raised in the same
-      conversation, which was built and then separately reverted; it
-      stands on its own.
+- [ ] Dynamische Stromtarife (variable/spot-price electricity tariffs) —
+      `price_entries.py`'s correction model is currently a flat €/kWh over
+      a validity date range, which doesn't fit a tariff that varies by
+      hour. Needs research before design: does openWB's own `data.costs`
+      per session already reflect the correct dynamic-tariff cost at charge
+      time (in which case a dynamic-tariff user may just want `cost_basis
+      = "openwb"` and no correction at all), or would this need per-hour
+      price data of its own? Raised by the user (2026-09-04) as a gap, not
+      yet scoped.

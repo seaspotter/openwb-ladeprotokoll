@@ -107,18 +107,7 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   back to openWB's own when no entry applies), and whether the delta
   exceeds `DELTA_FLAG_THRESHOLD` (0.01). Always prices `energy_kwh`
   (per-row), never `energy_since_plugged_kwh` (cumulative) — see
-  `chargelog_parse.py`'s docstring for why that distinction matters.
-  `decide_price`/`match_and_decide` also always compute a second,
-  purely informational `cost_corrected_grid_only`/`cost_used_grid_only`
-  pair — the same price × only the grid-imported share of `energy_kwh`
-  (`grid_pct`, the session's `power_source_grid_pct`; missing data is
-  treated as 100% grid). This does **not** feed `cost_used`, report
-  generation, or anything else — it exists solely for `index.html`'s own
-  "Kosten (Netzbezug)" column (see below). A fuller version of this idea
-  (a report-generation-time "Kostenbasis" choice, a PDF meta line, an
-  optional PDF column) was built, then explicitly reverted per user
-  feedback the same day — don't re-add that scope without being asked
-  again; this trimmed, display-only version is the wanted shape. Unit
+  `chargelog_parse.py`'s docstring for why that distinction matters. Unit
   tested.
 - `app/report_build.py` — **pure**: sessions + a selected column list +
   a `cost_basis` ("openwb" or "corrected") + each session's resolved price
@@ -302,14 +291,7 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   indicator (updated on page load and after "Jetzt abrufen" via a fresh
   `GET /api/sources`, since the pre-fetch source list used to pick which
   sources to hit is stale by the time the fetches finish) that also
-  surfaces any source whose last scheduled/manual fetch failed. The
-  sessions table's "Kosten (Netzbezug)" column (`s.cost_used_grid_only`,
-  already present on every `/api/sessions` row — see `price_entries.py`)
-  is purely informational and exists **only here** — not on
-  `report_review.html`, not in the PDF, not filterable/exportable. This
-  was deliberately scoped down from a fuller per-report "Kostenbasis"
-  feature after explicit user feedback the same day it was built; don't
-  re-expand it elsewhere without being asked.
+  surfaces any source whose last scheduled/manual fetch failed.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
