@@ -6,6 +6,12 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-04
+
+First release. Everything below shipped before this project had a
+version number, so it's all bundled into this one entry rather than
+retroactively split across nonexistent prior releases.
+
 ### Added
 - Automatic daily fetch is now configurable instead of a hardcoded fixed
   interval: a new "Automatischer Abruf aktiv" checkbox + time picker in

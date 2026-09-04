@@ -3,7 +3,7 @@
 Loose notes on where this is headed, not a commitment. Reorder freely —
 open an issue or just start working if something here matters to you.
 
-## Done (toward v0.1.0)
+## Done (v0.1.0, released 2026-09-04)
 
 - [x] Source config + `base_url` validation/normalization (`app/sources.py`)
 - [x] Charge-log JSON -> normalized `sessions` row parsing (`app/chargelog_parse.py`)
