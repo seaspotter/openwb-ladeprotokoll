@@ -107,6 +107,7 @@ _SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_sessions_source_time "
     "ON sessions (source_id, time_begin DESC);",
     "CREATE INDEX IF NOT EXISTS idx_sessions_vehicle ON sessions (vehicle_name);",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_chargepoint ON sessions (chargepoint_name);",
     # source_id/vehicle_name NULL = wildcard (any source / any vehicle) --
     # see price_entries.py for the match/precedence algorithm.
     """
@@ -160,6 +161,22 @@ _SCHEMA_STATEMENTS = [
     );
     """,
     "CREATE INDEX IF NOT EXISTS idx_report_sessions_report ON report_sessions (report_id);",
+    # Single-row app-wide settings for report generation (default PDF
+    # columns, which cost figure to display, whether the signature line
+    # appears) -- see report_settings.py. The CHECK pins it to exactly one
+    # row (id = 1); get_settings()/update_settings() insert that row with
+    # hardcoded defaults on first use rather than seeding it here, so the
+    # defaults live in one place (report_settings.py), not duplicated into
+    # SQL too.
+    """
+    CREATE TABLE IF NOT EXISTS report_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        default_columns JSONB NOT NULL,
+        cost_basis TEXT NOT NULL,
+        show_signature_line BOOLEAN NOT NULL,
+        CHECK (id = 1)
+    );
+    """,
 ]
 
 

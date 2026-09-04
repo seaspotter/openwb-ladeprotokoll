@@ -115,12 +115,13 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/fetch_service.py` | Orchestrates fetch -> parse -> upsert; per-source lock so manual/daily/backfill triggers can't race |
 | `app/scheduler.py` | Daily background fetch (all enabled sources, current month), started as an `asyncio` task in `main.py`'s lifespan |
 | `app/price_entries.py` | Pure: price-entry match/precedence + corrected-cost math |
-| `app/report_build.py` | Pure: sessions + columns + price decisions -> formatted rows/totals for the template |
+| `app/report_build.py` | Pure: sessions + columns + cost_basis + price decisions -> formatted rows/totals for the template |
+| `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, signature line) — pure `validate()` + DB get/update |
 | `app/pdf_render.py` | Jinja2 (`templates/report_pdf.html`) + WeasyPrint, HTML preview or PDF bytes from the same template |
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
 | `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" |
-| `app/templates/settings.html` | Source CRUD, price entry CRUD, backfill control, at `/settings` |
+| `app/templates/settings.html` | Source CRUD, price entry CRUD, backfill control, Berichts-Einstellungen, at `/settings` |
 | `app/templates/report_review.html` | Session/column/price-override selection UI, at `/report-review` |
 | `app/templates/report_pdf.html` | The actual report layout — rendered as both the HTML preview and the PDF |
 
@@ -161,9 +162,11 @@ value ever turns up, check it against `parse_record`'s
 
 - Line length is 100 columns (`setup.cfg` / `pyproject.toml`).
 - `sources.py`, `chargelog_parse.py`, `price_entries.py`, `report_build.py`
-  must stay free of I/O (no httpx, no asyncpg) — that's what makes them
-  cheap to unit test. Orchestration (HTTP calls, DB writes, WeasyPrint
-  rendering) belongs in `fetch_service.py` / `web.py` / `pdf_render.py`.
+  (and `report_settings.py`'s `validate()`) must stay free of I/O (no
+  httpx, no asyncpg) — that's what makes them cheap to unit test.
+  Orchestration (HTTP calls, DB writes, WeasyPrint rendering) belongs in
+  `fetch_service.py` / `web.py` / `pdf_render.py` /
+  `report_settings.py`'s `get_settings`/`update_settings`.
 - SQL is always parameterized (`$1`, `$2`, ...) — never interpolate
   request input into a query string.
 - asyncpg returns `NUMERIC` columns as `decimal.Decimal`, not `float`.

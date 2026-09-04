@@ -18,6 +18,9 @@ from .pdf_render import ReportMeta, render_html, render_pdf
 from .price_entries import PriceEntry, decide_price, match_and_decide
 from .report_build import COLUMN_LABELS, ReportBuildError
 from .report_build import build as build_report_data
+from .report_settings import ReportSettingsError
+from .report_settings import get_settings as get_report_settings
+from .report_settings import update_settings as update_report_settings
 from .sources import SourceValidationError, normalize_base_url, validate_name
 from .updater import check_for_update, get_current_version, run_update, self_update_available
 
@@ -263,6 +266,7 @@ async def api_backfill(source_id: int, body: BackfillIn):
 async def api_sessions(
     source_id: int | None = None,
     vehicle: str | None = None,
+    chargepoint: str | None = None,
     from_: date | None = None,
     to: date | None = None,
 ):
@@ -277,6 +281,8 @@ async def api_sessions(
         add("source_id = ${}", source_id)
     if vehicle:
         add("vehicle_name = ${}", vehicle)
+    if chargepoint:
+        add("chargepoint_name = ${}", chargepoint)
     if from_:
         add("time_begin::date >= ${}", from_)
     if to:
@@ -318,11 +324,32 @@ async def api_sessions(
 
 
 @router.get("/api/report-columns")
-def api_report_columns():
-    """Ordered list of every column report_build.py can render, so the
-    review UI's toggle checklist stays in sync with that module instead of
-    hardcoding a second copy of the column set."""
-    return {"columns": [{"key": k, "label": v} for k, v in COLUMN_LABELS.items()]}
+async def api_report_columns():
+    """Ordered list of every column report_build.py can render, plus which
+    ones are pre-checked by default (Berichts-Einstellungen) -- so the
+    review UI's toggle checklist stays in sync with both instead of
+    hardcoding a second copy."""
+    pool = get_pool()
+    settings = await get_report_settings(pool)
+    return {
+        "columns": [{"key": k, "label": v} for k, v in COLUMN_LABELS.items()],
+        "default_columns": settings["default_columns"],
+    }
+
+
+@router.get("/api/report-settings")
+async def api_get_report_settings():
+    pool = get_pool()
+    return await get_report_settings(pool)
+
+
+@router.put("/api/report-settings")
+async def api_update_report_settings(patch: dict):
+    pool = get_pool()
+    try:
+        return await update_report_settings(pool, patch)
+    except ReportSettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _to_float(value) -> float | None:
@@ -414,7 +441,7 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 
 
 async def _report_meta(
-    pool, report_id: str, title: str, generated_at: datetime, rows
+    pool, report_id: str, title: str, generated_at: datetime, rows, show_signature_line: bool
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
@@ -428,6 +455,7 @@ async def _report_meta(
         period_to=max(begins).strftime("%d.%m.%Y") if begins else None,
         source_names=sorted(source_names),
         vehicle_names=sorted({r["vehicle_name"] for r in rows if r["vehicle_name"]}),
+        show_signature_line=show_signature_line,
     )
 
 
@@ -461,12 +489,17 @@ async def api_report_preview(body: ReportBuildIn):
     """Runs the same build as api_create_report below, but renders straight
     to HTML and persists nothing -- for the review UI's live preview."""
     pool = get_pool()
+    settings = await get_report_settings(pool)
     sessions, rows = await _load_report_sessions(pool, body.session_ids, body.price_overrides)
     try:
-        data = build_report_data(sessions, body.columns)
+        data = build_report_data(
+            sessions, body.columns or settings["default_columns"], settings["cost_basis"]
+        )
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    meta = await _report_meta(pool, "Vorschau", "Vorschau", datetime.now(), rows)
+    meta = await _report_meta(
+        pool, "Vorschau", "Vorschau", datetime.now(), rows, settings["show_signature_line"]
+    )
     return render_html(data, meta)
 
 
@@ -477,9 +510,12 @@ async def api_create_report(body: ReportGenerateIn):
     steps because the PDF's own header/footer displays the report's id,
     which only exists once the row is inserted."""
     pool = get_pool()
+    settings = await get_report_settings(pool)
     sessions, rows = await _load_report_sessions(pool, body.session_ids, body.price_overrides)
     try:
-        data = build_report_data(sessions, body.columns)
+        data = build_report_data(
+            sessions, body.columns or settings["default_columns"], settings["cost_basis"]
+        )
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -498,7 +534,8 @@ async def api_create_report(body: ReportGenerateIn):
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), body.title, report_row["created_at"], rows
+                pool, str(report_id), body.title, report_row["created_at"], rows,
+                settings["show_signature_line"],
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(

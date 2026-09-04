@@ -1,7 +1,7 @@
 """openwb-ladeprotokoll
 --------------------------------
 Pulls openWB charge-log data into Postgres and turns it into audit-safe
-Dienstwagenabrechnung PDF reports.
+PDF charging-cost reports.
 """
 from __future__ import annotations
 

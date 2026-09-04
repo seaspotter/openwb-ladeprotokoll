@@ -7,11 +7,15 @@ Guidance for Claude Code when working in this repository.
 A standalone tool that polls one or more openWB installations' charge-log
 data (`data/charge_log/<yyyymm>.json`, served anonymously over plain HTTP,
 no core changes needed) into Postgres, and turns it into audit-safe PDF
-"Dienstwagenabrechnung" (company-car tax) reports mirroring openWB's own
-Ladeprotokoll UI table. Named after that page so it's discoverable to
-openWB users searching for it. Built as a sibling project rather than a PR
-into openWB core because core already sells a paid version of this same
-report. Sibling project: `../openwb-logger` (same author, same
+charging-cost reports mirroring openWB's own Ladeprotokoll UI table.
+Originally scoped around German company-car tax reporting, but the user
+explicitly asked (2026-09-04, after first real-world use) to drop that
+framing and the term "Dienstwagenabrechnung" everywhere — don't reintroduce
+it in code, docs, or the PDF; keep this generic ("charging-cost report").
+Named after the Ladeprotokoll page so it's discoverable to openWB users
+searching for it. Built as a sibling project rather than a PR into openWB
+core because core already sells a paid version of this same report.
+Sibling project: `../openwb-logger` (same author, same
 Docker+Postgres+CLAUDE.md/CHANGELOG.md conventions) — worth checking there
 first for how a pattern is usually done in this family of tools before
 inventing a new one here.
@@ -81,33 +85,61 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `chargelog_parse.py`'s docstring for why that distinction matters. Unit
   tested.
 - `app/report_build.py` — **pure**: sessions + a selected column list +
-  each session's resolved price decision -> the `ReportData` structure
-  (formatted display cells, deduplicated price-basis block, totals) the
-  template renders and that gets frozen into `report_sessions.snapshot`.
-  `COLUMN_LABELS` is the single source of truth for the 14 selectable
-  columns (also served at `GET /api/report-columns` for the review UI).
-  Totals sum `cost_used` (not raw `cost_corrected`) for the "corrected"
-  total, so an unpriced session's own openWB cost still counts rather than
-  silently dropping out. Unit tested.
+  a `cost_basis` ("openwb" or "corrected") + each session's resolved price
+  decision -> the `ReportData` structure (formatted display cells,
+  deduplicated price-basis block, totals) the template renders and that
+  gets frozen into `report_sessions.snapshot`. `COLUMN_LABELS` is the
+  single source of truth for the 13 selectable columns (also served at
+  `GET /api/report-columns` for the review UI) — note there is only ever
+  **one** `cost` column/total ("Kosten"), not separate openWB/corrected
+  ones side by side (a deliberate simplification per user feedback); which
+  underlying figure it shows is `cost_basis`, itself set once in
+  `report_settings.py`, not per-column. `ReportTotals` still keeps both
+  raw `cost_openwb`/`cost_corrected` sums internally (needed for the
+  `reports` table's own two total columns — no schema change was needed to
+  add this) even though the template only ever prints the one matching
+  `cost_basis`. Rows are always sorted chronologically ascending (oldest
+  first, latest at the bottom — a printed ledger reads that way) regardless
+  of what order sessions arrive in. Unit tested.
+- `app/report_settings.py` — thin: a single-row `report_settings` table
+  (id=1, `CHECK`-enforced) holding `default_columns` (pre-checked in the
+  review UI), `cost_basis`, and `show_signature_line` — edited from
+  Einstellungen's "Berichts-Einstellungen" panel via `GET/PUT
+  /api/report-settings`. `validate()` is pure and unit tested; `get_settings`/
+  `update_settings` do the DB round trip (upsert-on-first-read, so there's
+  no separate seeding step).
 - `app/pdf_render.py` — Jinja2 (`templates/report_pdf.html`) + WeasyPrint.
   One template renders both the HTML preview and the actual PDF — `@page`
   rules WeasyPrint honors are simply ignored by a browser. The page is
-  **landscape**: portrait's ~17cm printable width cuts off the last
-  columns once several are selected (verified visually, not just assumed
-  — see DEVELOPMENT.md). The footer (disclaimer + signature line) has
-  `page-break-inside: avoid` — without it, WeasyPrint can push just the
-  signature line onto its own near-blank trailing page.
+  **portrait** by default (user preference) — with the cost column
+  collapsed to one and a lean default column set (`report_settings.py`)
+  this fits, but selecting most/all 13 columns at once can still overflow
+  portrait's ~17cm printable width the same way it did before landscape
+  was tried and reverted; no orientation setting exists, don't silently
+  reintroduce landscape as the default if this resurfaces. The footer
+  (disclaimer + optional signature line, `ReportMeta.show_signature_line`)
+  has `page-break-inside: avoid` — without it, WeasyPrint can push just the
+  signature line onto its own near-blank trailing page. The document
+  deliberately never displays its own `report_id` — only the user-given
+  `title` — per user feedback that a bare "Bericht 3" was meaningless; the
+  id still drives the PDF's filename/URL behind the scenes.
 - `app/web.py` — FastAPI routes for source CRUD, fetch triggers, price
-  entry CRUD, session listing (enriched with each session's matched price
-  decision), and report preview/generate/list/pdf/delete. Plain
-  parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns
-  as `Decimal`; anything feeding `price_entries.py`/`report_build.py`
-  converts to `float` first (`_to_float`), since those modules are written
-  and tested against plain floats. A generated report is built in two DB
-  steps: insert the `reports` row first (to get a real id), *then* render
-  the PDF (its own header/footer displays that id) and `UPDATE` the row
-  with the bytes — one transaction, so a failure partway leaves nothing
-  behind.
+  entry CRUD (including price-entry `notes`), report-settings, session
+  listing (enriched with each session's matched price decision; filterable
+  by source/vehicle/**chargepoint**/date), and report preview/generate/
+  list/pdf/delete. Plain parameterized SQL via asyncpg, no ORM. asyncpg
+  returns `NUMERIC` columns as `Decimal`; anything feeding
+  `price_entries.py`/`report_build.py` converts to `float` first
+  (`_to_float`), since those modules are written and tested against plain
+  floats. A generated report is built in two DB steps: insert the
+  `reports` row first (to get a real id, needed for the PDF's
+  filename/URL even though the document body itself no longer shows it),
+  *then* render the PDF and `UPDATE` the row with the bytes — one
+  transaction, so a failure partway leaves nothing behind. `body.columns
+  or settings["default_columns"]` (not `report_build.py`'s own
+  all-columns fallback) is what "no columns specified" actually falls back
+  to, so an API caller that omits `columns` gets the user's configured
+  default, not every column.
 - `app/updater.py` — optional in-app self-update (`git pull` + process
   restart), identical pattern to `openwb-logger/app/updater.py`. Works
   because `docker-compose.yml` bind-mounts the repo onto the container's
@@ -115,24 +147,45 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/main.py` — app factory, lifespan (DB pool, starts/cancels the
   scheduler task).
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
-  overview (filter by source/vehicle/date, no selection/columns — that's
-  `report_review.html`'s job) plus a "Jetzt abrufen" button that fetches
-  every enabled source's current month. Sources and price entries are
-  deliberately **not** managed here — see `settings.html` — so this page
-  stays focused on "what got fetched", not configuration.
-- `app/templates/settings.html` — source CRUD, price entry CRUD, and the
+  overview (filter by source/vehicle/chargepoint/date — vehicle and
+  chargepoint are `<select>`s populated from the currently-loaded sessions,
+  not free text, so filters can't typo their way to zero results; no
+  selection/columns — that's `report_review.html`'s job) plus a "Jetzt
+  abrufen" button that fetches every enabled source's current month.
+  Sources and price entries are deliberately **not** managed here — see
+  `settings.html` — so this page stays focused on "what got fetched", not
+  configuration (a user-feedback-driven split, see [[feedback-ui-separation]]
+  in project memory — apply the same split to any new page).
+- `app/templates/settings.html` — source CRUD (add-form behind a "+" icon
+  next to "Quellen", not always visible), price entry CRUD (same "+"
+  pattern; includes a free-text `notes` field, shown in the table, since an
+  unlabeled provider+date-range row is meaningless months later), the
   backfill control (`POST /api/sources/{id}/backfill`, `from_month`/
   `to_month` as "YYYYMM" — the UI's `<input type="month">` gives
   "YYYY-MM" and just strips the dash) for pulling in months older than
-  the current one, which the daily scheduler/"Jetzt abrufen" never touch.
+  the current one, and "Berichts-Einstellungen" (`GET/PUT
+  /api/report-settings`) for the report-wide `default_columns`/
+  `cost_basis`/`show_signature_line` settings `report_settings.py` owns.
 - `app/templates/report_review.html` — session/column/price-override
-  selection UI (`/report-review`): loads sessions via `/api/sessions`,
-  recomputes totals client-side as the selection changes (mirroring
-  `report_build.py`'s summing logic in JS, since this is just an
-  interactive preview — the server-side build via
+  selection UI (`/report-review`): filters (source/vehicle/chargepoint/
+  date, same dropdown-not-free-text pattern as `index.html`) load sessions
+  via `/api/sessions`; the PDF-column checklist starts pre-checked from
+  `GET /api/report-columns`'s `default_columns` (the Berichts-Einstellungen
+  value), not "all columns"; recomputes totals client-side as the
+  selection changes (mirroring `report_build.py`'s summing logic in JS,
+  since this is just an interactive preview — the server-side build via
   `/api/reports/preview`/`/api/reports` is the actual source of truth for
   what a generated report contains), and lists/links previously generated
   reports. Keep new UI copy in German too.
+
+All three page templates share a `a.nav-btn` header-button style (not bare
+text links) for navigation, positioned consistently: a secondary "back"
+link on the left (`← Übersicht` / nothing on `index.html`, which has no
+"back") and the primary forward action on the right, `.primary` (accent
+color) only for the one actual next-step action on that page (`Bericht
+erstellen` from `index.html`/`settings.html`; `report_review.html`'s own
+"Bericht erzeugen" button is the primary action there instead, so its
+header's `Einstellungen` link stays plain).
 - An MCP endpoint — deliberately deferred past v1, see `ROADMAP.md`.
 
 Storage is Postgres only. Reports, once generated, are immutable — the

@@ -5,12 +5,16 @@
 <title>{{ meta.title }}</title>
 <style>
   @page {
-    /* Landscape: the sessions table has up to 14 columns when all are
-       selected (see report_build.py's COLUMN_LABELS) -- portrait's ~17cm
-       printable width cuts the last columns off the page, landscape's
-       ~26cm comfortably fits them all at a still-readable font size. */
-    size: A4 landscape;
-    margin: 1.8cm 1.4cm 2cm 1.4cm;
+    /* Portrait by default (per user preference). With the cost column
+       collapsed to a single "Kosten" (see report_build.py) and a lean
+       default column selection (see report_settings.py), this fits
+       comfortably -- but selecting most/all columns at once can still
+       overflow portrait's ~17cm printable width, same as it did with 14
+       columns before. No orientation setting exists yet; if that turns
+       out to matter, revisit rather than silently reintroducing
+       landscape as the default. */
+    size: A4;
+    margin: 1.8cm 1.5cm 2cm 1.5cm;
     @bottom-center {
       content: "Seite " counter(page) " von " counter(pages);
       font-size: 9px;
@@ -21,7 +25,7 @@
   body {
     margin: 0; color: #1a1d24; background: #ffffff;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    font-size: 11px; line-height: 1.4;
+    font-size: 10.5px; line-height: 1.4;
   }
   header.doc-header {
     display: flex; align-items: center; gap: 12px;
@@ -40,12 +44,12 @@
   }
 
   table.price-basis, table.sessions, table.totals {
-    width: 100%; border-collapse: collapse; font-size: 10px;
+    width: 100%; border-collapse: collapse; font-size: 9.5px;
   }
   table.price-basis th, table.price-basis td,
   table.sessions th, table.sessions td,
   table.totals th, table.totals td {
-    border: 1px solid #d8dbe2; padding: 4px 6px; text-align: left;
+    border: 1px solid #d8dbe2; padding: 3px 5px; text-align: left;
   }
   table.price-basis th, table.sessions th, table.totals th {
     background: #f5f6f8; font-weight: 600;
@@ -78,8 +82,8 @@
 <header class="doc-header">
   <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2316a34a'/%3E%3Cpath d='M13 3 5 14h5l-1 7 8-11h-5z' fill='white'/%3E%3C/svg%3E" alt="">
   <div>
-    <h1>Ladeprotokoll &ndash; Dienstwagenabrechnung</h1>
-    <div class="subtitle">Bericht {{ meta.report_id }} &middot; erzeugt am {{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}</div>
+    <h1>Ladeprotokoll</h1>
+    <div class="subtitle">{{ meta.title }} &middot; erzeugt am {{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}</div>
   </div>
 </header>
 
@@ -129,7 +133,7 @@
     {% for row in data.rows %}
     <tr>
       {% for col in data.columns %}
-      <td class="{{ 'flagged' if row.delta_flagged and col in ('cost_openwb', 'cost_corrected') else '' }}">{{ row.cells[col] }}</td>
+      <td class="{{ 'flagged' if row.delta_flagged and col == 'cost' else '' }}">{{ row.cells[col] }}</td>
       {% endfor %}
     </tr>
     {% endfor %}
@@ -139,21 +143,23 @@
 <h2 class="section-title">Summe</h2>
 <table class="totals">
   <tr><td class="label">Dauer</td><td class="numeric">{{ data.totals.duration_display }}</td></tr>
-  <tr><td class="label">Energie</td><td class="numeric">{{ data.totals.energy_display }}</td></tr>
+  <tr><td class="label">Geladene Energie</td><td class="numeric">{{ data.totals.energy_display }}</td></tr>
+  {% if data.totals.energy_discharged_kwh %}
   <tr><td class="label">Entladene Energie</td><td class="numeric">{{ data.totals.energy_discharged_display }}</td></tr>
+  {% endif %}
   <tr><td class="label">Reichweite</td><td class="numeric">{{ data.totals.range_display }}</td></tr>
-  <tr><td class="label">Kosten (openWB)</td><td class="numeric">{{ data.totals.cost_openwb_display }}</td></tr>
-  <tr><td class="label">Kosten (korrigiert)</td><td class="numeric">{{ data.totals.cost_corrected_display }}</td></tr>
+  <tr><td class="label">Kosten</td><td class="numeric">{{ data.totals.cost_display }}</td></tr>
 </table>
 
 <div class="doc-footer">
   <p class="disclaimer">
     Dieses Dokument spiegelt die von openWB erfassten Ladedaten zum Zeitpunkt der Erzeugung
-    wider (Bericht {{ meta.report_id }}, erzeugt am {{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}).
-    Nachträgliche Änderungen an den Quelldaten in openWB wirken sich nicht auf dieses bereits
-    erzeugte Dokument aus.
+    ({{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}) wider. Nachträgliche Änderungen an den
+    Quelldaten in openWB wirken sich nicht auf dieses bereits erzeugte Dokument aus.
   </p>
+  {% if meta.show_signature_line %}
   <div class="signature-line">Unterschrift Fahrzeughalter / Datum</div>
+  {% endif %}
 </div>
 
 </body>

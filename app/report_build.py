@@ -17,7 +17,11 @@ from datetime import date, datetime
 
 # Ordered so the rendered table's column order is always this one,
 # regardless of what order the caller's `columns` list arrives in (e.g. a
-# JS Set or a hand-built request body).
+# JS Set or a hand-built request body). "cost" is a single column whose
+# *value* depends on the cost_basis passed to build() -- report_settings.py
+# owns the openWB-vs-corrected choice; this module just renders whichever
+# one it's told, never both at once (per user feedback: showing both
+# "Kosten (openWB)" and "Kosten (korrigiert)" side by side was confusing).
 COLUMN_LABELS: dict[str, str] = {
     "begin": "Beginn",
     "end": "Ende",
@@ -30,12 +34,13 @@ COLUMN_LABELS: dict[str, str] = {
     "range_charged": "Reichweite",
     "meter_start": "Zähler Beginn",
     "meter_end": "Zähler Ende",
-    "cost_openwb": "Kosten (openWB)",
-    "cost_corrected": "Kosten (korrigiert)",
+    "cost": "Kosten",
     "price_basis": "Preisbasis",
 }
 
 DEFAULT_COLUMNS: list[str] = list(COLUMN_LABELS)
+
+COST_BASES = ("openwb", "corrected")
 
 
 class ReportBuildError(ValueError):
@@ -49,6 +54,7 @@ class SessionRow:
     cost_openwb: float | None
     cost_corrected: float | None
     cost_used: float | None
+    cost: float | None  # whichever of the above matches this build's cost_basis
     energy_kwh: float | None
     energy_discharged_kwh: float | None
     range_charged_km: float | None
@@ -72,14 +78,20 @@ class ReportTotals:
     energy_kwh: float
     energy_discharged_kwh: float
     range_charged_km: float
+    # Both raw totals are always computed and stored (audit trail, and the
+    # `reports` table's own NOT NULL columns) even though only one of them
+    # -- `cost`/`cost_display`, matching this build's cost_basis -- is what
+    # the template actually prints.
     cost_openwb: float
     cost_corrected: float
+    cost: float
     duration_display: str
     energy_display: str
     energy_discharged_display: str
     range_display: str
     cost_openwb_display: str
     cost_corrected_display: str
+    cost_display: str
 
 
 @dataclass
@@ -134,7 +146,16 @@ def _validate_columns(columns: list[str] | None) -> list[str]:
     return [c for c in DEFAULT_COLUMNS if c in columns]
 
 
-def _build_cells(session: dict, columns: list[str]) -> dict[str, str]:
+def _resolve_cost(session: dict, cost_basis: str) -> float | None:
+    if cost_basis == "openwb":
+        return session.get("cost_openwb")
+    # "corrected": cost_used already carries decide_price's own fallback to
+    # openWB's value when no price entry applies, so this is always a
+    # complete figure, never silently blank for an unpriced session.
+    return session.get("cost_used")
+
+
+def _build_cells(session: dict, columns: list[str], cost: float | None) -> dict[str, str]:
     price_entry = session.get("price_entry")
     values = {
         "begin": _fmt_datetime(session.get("time_begin")),
@@ -148,14 +169,15 @@ def _build_cells(session: dict, columns: list[str]) -> dict[str, str]:
         "range_charged": _fmt_number(session.get("range_charged_km"), 0, " km"),
         "meter_start": _fmt_number(session.get("meter_start_kwh"), 2, " kWh"),
         "meter_end": _fmt_number(session.get("meter_end_kwh"), 2, " kWh"),
-        "cost_openwb": _fmt_cost(session.get("cost_openwb")),
-        "cost_corrected": _fmt_cost(session.get("cost_corrected")),
+        "cost": _fmt_cost(cost),
         "price_basis": price_entry["provider"] if price_entry else "kein Preis hinterlegt",
     }
     return {c: values[c] for c in columns}
 
 
-def build(sessions: list[dict], columns: list[str] | None = None) -> ReportData:
+def build(
+    sessions: list[dict], columns: list[str] | None = None, cost_basis: str = "corrected"
+) -> ReportData:
     """`sessions` is a list of dicts, each already carrying a session's own
     fields (id, time_begin, time_end, time_charged_seconds, vehicle_name,
     odometer, chargepoint_name, chargepoint_serial_number, energy_kwh,
@@ -163,9 +185,17 @@ def build(sessions: list[dict], columns: list[str] | None = None) -> ReportData:
     meter_end_kwh, cost_openwb) plus its resolved price decision
     (cost_corrected, cost_used, price_entry -- as produced by
     price_entries.decide_price, price_entry being a PriceEntry dict or
-    None). Order of `sessions` is preserved in the output.
+    None).
+
+    Rows are always sorted chronologically ascending (oldest first,
+    latest at the bottom) regardless of the order `sessions` arrives in --
+    a printed ledger reads that way, unlike the review UI's session list
+    (newest first, better for "did today's fetch show up").
     """
+    if cost_basis not in COST_BASES:
+        raise ReportBuildError(f"Unbekannte cost_basis: {cost_basis!r}")
     cols = _validate_columns(columns)
+    sessions = sorted(sessions, key=lambda s: s["time_begin"])
 
     rows: list[SessionRow] = []
     price_basis_by_key: dict[tuple, PriceBasisEntry] = {}
@@ -195,12 +225,14 @@ def build(sessions: list[dict], columns: list[str] | None = None) -> ReportData:
                 price_basis_by_key[key] = entry
             entry.session_count += 1
 
+        cost = _resolve_cost(s, cost_basis)
         rows.append(SessionRow(
             session_id=s["id"],
-            cells=_build_cells(s, cols),
+            cells=_build_cells(s, cols, cost),
             cost_openwb=s.get("cost_openwb"),
             cost_corrected=s.get("cost_corrected"),
             cost_used=s.get("cost_used"),
+            cost=cost,
             energy_kwh=s.get("energy_kwh"),
             energy_discharged_kwh=s.get("energy_discharged_kwh"),
             range_charged_km=s.get("range_charged_km"),
@@ -220,6 +252,8 @@ def build(sessions: list[dict], columns: list[str] | None = None) -> ReportData:
         # total_cost_openwb, rather than silently excluding unpriced rows.
         total_cost_corrected += s.get("cost_used") or 0.0
 
+    total_cost = total_cost_openwb if cost_basis == "openwb" else total_cost_corrected
+
     totals = ReportTotals(
         duration_seconds=total_duration,
         energy_kwh=total_energy,
@@ -227,12 +261,14 @@ def build(sessions: list[dict], columns: list[str] | None = None) -> ReportData:
         range_charged_km=total_range,
         cost_openwb=total_cost_openwb,
         cost_corrected=total_cost_corrected,
+        cost=total_cost,
         duration_display=_fmt_duration(total_duration),
         energy_display=_fmt_number(total_energy, 2, " kWh"),
         energy_discharged_display=_fmt_number(total_energy_discharged, 2, " kWh"),
         range_display=_fmt_number(total_range, 0, " km"),
         cost_openwb_display=_fmt_cost(total_cost_openwb),
         cost_corrected_display=_fmt_cost(total_cost_corrected),
+        cost_display=_fmt_cost(total_cost),
     )
 
     return ReportData(

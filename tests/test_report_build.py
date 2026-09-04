@@ -21,11 +21,12 @@ def _price_entry(provider="Stadtwerke", price_per_kwh=0.30,
 
 def _session(id=1, energy_kwh=10.0, cost_openwb=3.0, price_entry=None,
              cost_corrected=None, cost_used=None, delta_flagged=False,
-             time_charged_seconds=3600, energy_discharged_kwh=0.0, range_charged_km=50.0):
+             time_charged_seconds=3600, energy_discharged_kwh=0.0, range_charged_km=50.0,
+             time_begin=datetime(2026, 8, 2, 8, 24, 55)):
     return {
         "id": id,
-        "time_begin": datetime(2026, 8, 2, 8, 24, 55),
-        "time_end": datetime(2026, 8, 2, 9, 22, 45),
+        "time_begin": time_begin,
+        "time_end": time_begin,
         "time_charged_seconds": time_charged_seconds,
         "vehicle_name": "VW ID3",
         "odometer": 14611.0,
@@ -51,8 +52,8 @@ def test_default_columns_used_when_none_given():
 
 
 def test_column_order_normalized_regardless_of_input_order():
-    data = build([_session()], columns=["cost_openwb", "begin", "vehicle"])
-    assert data.columns == ["begin", "vehicle", "cost_openwb"]
+    data = build([_session()], columns=["cost", "begin", "vehicle"])
+    assert data.columns == ["begin", "vehicle", "cost"]
 
 
 def test_unknown_column_raises():
@@ -65,12 +66,35 @@ def test_empty_columns_raises():
         build([_session()], columns=[])
 
 
+def test_unknown_cost_basis_raises():
+    with pytest.raises(ReportBuildError):
+        build([_session()], cost_basis="bogus")
+
+
 def test_cells_only_include_selected_columns():
     data = build([_session()], columns=["begin", "energy"])
     row = data.rows[0]
     assert set(row.cells.keys()) == {"begin", "energy"}
     assert row.cells["begin"] == "02.08.2026 08:24"
     assert row.cells["energy"] == "10,00 kWh"
+
+
+def test_cost_column_uses_corrected_basis_by_default():
+    entry = _price_entry(price_per_kwh=0.30)
+    s = _session(energy_kwh=10.0, cost_openwb=3.0, price_entry=entry, cost_corrected=3.0,
+                 cost_used=3.0)
+    data = build([s], columns=["cost"])
+    assert data.rows[0].cells["cost"] == "3,00 €"
+    assert data.rows[0].cost == pytest.approx(3.0)
+
+
+def test_cost_column_uses_openwb_basis_when_selected():
+    entry = _price_entry(price_per_kwh=0.30)
+    s = _session(energy_kwh=10.0, cost_openwb=4.5, price_entry=entry, cost_corrected=3.0,
+                 cost_used=3.0)
+    data = build([s], columns=["cost"], cost_basis="openwb")
+    assert data.rows[0].cells["cost"] == "4,50 €"
+    assert data.rows[0].cost == pytest.approx(4.5)
 
 
 def test_price_basis_cell_no_entry():
@@ -98,7 +122,16 @@ def test_totals_sum_across_sessions():
     assert data.totals.range_charged_km == pytest.approx(70.0)
     assert data.totals.cost_openwb == pytest.approx(4.5)
     assert data.totals.cost_corrected == pytest.approx(4.5)
+    assert data.totals.cost == pytest.approx(4.5)
     assert data.totals.duration_display == "1:30"
+
+
+def test_totals_cost_matches_openwb_basis_when_selected():
+    s1 = _session(id=1, cost_openwb=3.0, cost_used=2.0)
+    s2 = _session(id=2, cost_openwb=1.5, cost_used=1.0)
+    data = build([s1, s2], cost_basis="openwb")
+    assert data.totals.cost == pytest.approx(4.5)
+    assert data.totals.cost_display == "4,50 €"
 
 
 def test_totals_use_cost_used_not_raw_cost_corrected_for_corrected_total():
@@ -135,9 +168,16 @@ def test_price_basis_empty_when_no_sessions_have_a_price_entry():
     assert data.price_basis == []
 
 
-def test_row_order_preserved():
-    data = build([_session(id=3), _session(id=1), _session(id=2)])
-    assert [r.session_id for r in data.rows] == [3, 1, 2]
+def test_rows_sorted_ascending_by_time_begin_regardless_of_input_order():
+    """A printed ledger reads oldest-first, latest at the bottom -- rows
+    must always come out sorted this way, independent of the order
+    sessions were selected/loaded in (which is newest-first in the review
+    UI, see report_review.html)."""
+    s_new = _session(id=1, time_begin=datetime(2026, 8, 30))
+    s_old = _session(id=2, time_begin=datetime(2026, 8, 1))
+    s_mid = _session(id=3, time_begin=datetime(2026, 8, 15))
+    data = build([s_new, s_old, s_mid])
+    assert [r.session_id for r in data.rows] == [2, 3, 1]
 
 
 def test_missing_optional_fields_render_as_dash():

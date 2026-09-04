@@ -7,11 +7,49 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Changed
-- Split the single sources+prices dashboard into two pages, based on
-  real-usage feedback: `/` is now a read-only charge-log overview (filter
-  by source/vehicle/date, a "Jetzt abrufen" button that fetches every
-  enabled source's current month) with no configuration on it; source and
-  price entry management moved to a new `/settings` page.
+- First real-usage feedback round (2026-09-04, after testing against a
+  real openWB and a real Proxmox deployment):
+  - Removed "Dienstwagenabrechnung" everywhere (code, docs, the PDF
+    itself) per explicit request — the tool is now framed generically as
+    a charging-cost report, not tied to German company-car tax reporting.
+  - The PDF's `@page` size flipped back to **portrait** (was landscape).
+    With the cost column collapsed to one (see below) and a lean default
+    column selection, portrait fits — but selecting most/all columns at
+    once can still overflow it, same tradeoff as before landscape was
+    tried.
+  - The PDF no longer shows its own `report_id` ("Bericht 3" was
+    meaningless to a reader) — the user-given title is shown instead; the
+    id still drives the file's URL/filename behind the scenes.
+  - The PDF's two cost columns/totals ("Kosten (openWB)" and "Kosten
+    (korrigiert)") collapsed into a single "Kosten", driven by a new
+    `cost_basis` setting (openWB's own value, or the corrected one with
+    its existing per-row fallback) — new `app/report_settings.py` and a
+    "Berichts-Einstellungen" panel in `/settings`, alongside a
+    `default_columns` setting (was: always all columns) and a
+    `show_signature_line` toggle (was: always shown; now off by default).
+  - PDF rows now sort chronologically ascending (oldest first, latest at
+    the bottom, like a ledger) regardless of selection order; the totals'
+    "Energie" row is now labelled "Geladene Energie", and "Entladene
+    Energie" is omitted entirely when it's zero (true for every session
+    seen so far, no V2H/V2G vehicle in the sample data).
+  - Vehicle and chargepoint became filterable dropdowns (populated from
+    real data, optionally scoped to the selected source) instead of free
+    text, on both `/` and `/report-review`; `/report-review` gained a
+    chargepoint filter it didn't have before.
+  - Price entries gained a `notes` field (already existed in the schema
+    and API, never exposed in the UI) — now a form field and a table
+    column in `/settings`, since an unlabeled provider+date-range row is
+    meaningless months later.
+  - Source and price entry "add" forms collapsed behind a "+" icon next
+    to their panel headings instead of always being visible.
+  - Header navigation across all three pages (`/`, `/settings`,
+    `/report-review`) now uses consistent button-styled links instead of
+    plain text, with the primary forward action right-aligned.
+- Split the single sources+prices dashboard into two pages: `/` is now a
+  read-only charge-log overview (filter by source/vehicle/date, a "Jetzt
+  abrufen" button that fetches every enabled source's current month) with
+  no configuration on it; source and price entry management moved to a
+  new `/settings` page.
 - Surfaced the backfill endpoint (`POST /api/sources/{id}/backfill`,
   which already existed but had no UI) in `/settings` as "Verlauf
   abrufen": pick a source and a from/to month to pull in history older
@@ -53,9 +91,8 @@ what that means in practice for this project.
 - Report generation: `app/report_build.py` (pure -- sessions + selected
   columns + price decisions -> formatted rows/totals/price-basis block)
   and `app/pdf_render.py` (one Jinja2 template rendered as either an HTML
-  preview or, via WeasyPrint, the final PDF -- landscape A4, since
-  portrait cuts off the last columns once several of the 14 selectable
-  ones are on). New routes: `POST /api/reports/preview` (nothing
+  preview or, via WeasyPrint, the final PDF). New routes:
+  `POST /api/reports/preview` (nothing
   persisted), `POST /api/reports` (inserts an immutable `reports` row plus
   one frozen `report_sessions` snapshot per included session, stores the
   rendered PDF bytes), `GET /reports`, `GET /reports/{id}`,

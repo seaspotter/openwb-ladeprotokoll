@@ -24,12 +24,17 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .brand-mark { font-weight: 700; color: #16a34a; }
-  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
-  header a:hover { color: var(--accent); }
-  header .spacer { margin-left: auto; }
+  .nav-spacer { margin-left: auto; }
+  a.nav-btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; text-decoration: none;
+    display: inline-flex; align-items: center; cursor: pointer;
+  }
+  a.nav-btn:hover { border-color: var(--accent); }
+  a.nav-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   main { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
   .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -56,16 +61,17 @@
 <body>
 <header>
   <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
-  <a href="/settings">Einstellungen</a>
-  <span class="spacer"></span>
-  <a href="/report-review">Bericht erstellen &rarr;</a>
+  <a href="/settings" class="nav-btn">Einstellungen</a>
+  <span class="nav-spacer"></span>
+  <a href="/report-review" class="nav-btn primary">Bericht erstellen &rarr;</a>
 </header>
 <main>
   <div class="panel">
     <h2>Ladevorgänge</h2>
     <form class="inline" id="filter-form">
       <select id="filter-source"><option value="">Alle Quellen</option></select>
-      <input type="text" id="filter-vehicle" placeholder="Fahrzeug (leer = alle)">
+      <select id="filter-vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="filter-chargepoint"><option value="">Alle Ladepunkte</option></select>
       <input type="date" id="filter-from">
       <input type="date" id="filter-to">
       <button type="submit">Filtern</button>
@@ -109,6 +115,18 @@ function fmtNum(value, decimals, suffix) {
   return value.toFixed(decimals).replace('.', ',') + (suffix || '');
 }
 
+function populateSelect(select, values, placeholder) {
+  const current = select.value;
+  select.innerHTML = `<option value="">${placeholder}</option>`;
+  for (const v of values) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
 let sources = [];
 let sourcesById = {};
 
@@ -128,14 +146,30 @@ async function loadSourceFilter() {
   select.value = current;
 }
 
+async function loadVehicleAndChargepointFilters() {
+  // Populated from every session regardless of the vehicle/chargepoint
+  // filter itself (chicken-and-egg), but respecting the source filter so
+  // the dropdowns don't offer vehicles/Ladepunkte from a different source.
+  const params = new URLSearchParams();
+  const sourceId = document.getElementById('filter-source').value;
+  if (sourceId) params.set('source_id', sourceId);
+  const { sessions: all } = await api('/api/sessions?' + params.toString());
+  const vehicles = [...new Set(all.map((s) => s.vehicle_name).filter(Boolean))].sort();
+  const chargepoints = [...new Set(all.map((s) => s.chargepoint_name).filter(Boolean))].sort();
+  populateSelect(document.getElementById('filter-vehicle'), vehicles, 'Alle Fahrzeuge');
+  populateSelect(document.getElementById('filter-chargepoint'), chargepoints, 'Alle Ladepunkte');
+}
+
 async function loadSessions() {
   const params = new URLSearchParams();
   const sourceId = document.getElementById('filter-source').value;
   const vehicle = document.getElementById('filter-vehicle').value;
+  const chargepoint = document.getElementById('filter-chargepoint').value;
   const from = document.getElementById('filter-from').value;
   const to = document.getElementById('filter-to').value;
   if (sourceId) params.set('source_id', sourceId);
   if (vehicle) params.set('vehicle', vehicle);
+  if (chargepoint) params.set('chargepoint', chargepoint);
   if (from) params.set('from_', from);
   if (to) params.set('to', to);
 
@@ -163,6 +197,10 @@ async function loadSessions() {
     body.appendChild(tr);
   }
 }
+
+document.getElementById('filter-source').addEventListener('change', () => {
+  loadVehicleAndChargepointFilters();
+});
 
 document.getElementById('filter-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
@@ -193,11 +231,14 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
     ? `${ok} Quelle(n) erfolgreich abgerufen.`
     : `${ok} Quelle(n) erfolgreich, ${failed} fehlgeschlagen -- Details unter "Einstellungen".`;
   btn.disabled = false;
-  loadSourceFilter().then(loadSessions);
+  await loadSourceFilter();
+  await loadVehicleAndChargepointFilters();
+  await loadSessions();
 });
 
 (async function init() {
   await loadSourceFilter();
+  await loadVehicleAndChargepointFilters();
   await loadSessions();
 })();
 </script>

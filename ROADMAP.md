@@ -34,26 +34,44 @@ open an issue or just start working if something here matters to you.
       generated reports.
 - [x] Report build + WeasyPrint PDF rendering, immutable stored reports
       (`app/report_build.py`, `app/pdf_render.py`, `templates/report_pdf.html`).
-      Landscape A4 (portrait cuts off columns once several are selected —
-      caught by actually rendering and looking at it, not just reasoning
-      about CSS). Report id assigned before PDF render (the doc's own
-      header/footer needs it), one DB transaction covering the `reports`
-      row, its `pdf_data` update, and every `report_sessions` snapshot.
+      Report id assigned before PDF render (needed for the filename/URL,
+      no longer shown in the document itself — see below), one DB
+      transaction covering the `reports` row, its `pdf_data` update, and
+      every `report_sessions` snapshot.
 - [x] Verified end to end against a real (embedded, no-root) Postgres —
       not just unit tests: source create, session listing with price
       matching, price entry CRUD, report preview/generate/list/pdf/delete,
       price overrides, and error handling (unknown column, missing
       session) all actually exercised through the real HTTP routes. See
       DEVELOPMENT.md's "Testing against a real Postgres".
+- [x] Pushed to GitHub, CI green (github.com/seaspotter/openwb-ladeprotokoll)
+      — first CI run failed on a WeasyPrint apt dependency that's no
+      longer needed since WeasyPrint 53+ (`libcairo2`/`libgdk-pixbuf2.0-0`
+      removed from `Dockerfile`), fixed same day.
+- [x] Exercised against a real, running openWB and a real Proxmox LXC
+      `docker compose up` deployment (2026-09-04) — both work. One
+      deployment issue hit along the way was environmental, not this
+      project's: an IP address conflict with an unrelated macvlan Docker
+      container elsewhere on the user's LAN, not a bug here.
+- [x] First real-usage feedback round, all shipped: dashboard split into
+      a read-only overview (`/`) and a `/settings` page (sources, prices,
+      backfill, and new "Berichts-Einstellungen"); source/price entry
+      add-forms collapsed behind a "+" icon; price entries gained a
+      `notes` field, now shown in the UI; vehicle/chargepoint filters
+      became dropdowns (index + report-review) instead of free text, and
+      report-review gained a chargepoint filter; the PDF's two "Kosten"
+      columns collapsed into one, driven by a new `cost_basis` setting
+      ("openwb" or "corrected"); default page orientation flipped back to
+      **portrait**; "Dienstwagenabrechnung" removed everywhere (code,
+      docs, PDF) per explicit request; the PDF no longer shows its own
+      report id, only the user-given title; rows in the PDF sort
+      chronologically ascending (latest at the bottom); "Entladene
+      Energie" is hidden in the totals when zero; the signature line is
+      now off by default and toggleable in settings; header nav across
+      all three pages uses consistent button styling.
 
 ## Next
 
-- [ ] Exercise the full flow against a real, running openWB instance (only
-      `chargelog_parse.py` has been checked against real openWB data so
-      far — `openwb_client.py`'s actual HTTP fetch has not)
-- [ ] A real `docker compose up` deployment (verified so far via a
-      TestClient + embedded Postgres, not the actual Docker image/compose
-      file)
 - [ ] CSV export of the currently selected sessions, alongside the PDF
 
 ## Someday / maybe

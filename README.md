@@ -2,14 +2,13 @@
 
 # openwb-ladeprotokoll
 
-Turns openWB's charging history into an audit-safe PDF
-"Dienstwagenabrechnung" (company-car tax report) — the document a real
-accountant can use, not a screenshot of the Ladeprotokoll table. Polls one
-or more openWB installations' `data/charge_log/*.json` over plain HTTP (no
-core changes, no auth needed), stores it in Postgres, lets you correct the
-cost per session against your own electricity price/provider, and renders
-a selectable-column PDF that stays reproducible even if the source data is
-edited later.
+Turns openWB's charging history into an audit-safe PDF cost report — the
+document a real accountant can use, not a screenshot of the Ladeprotokoll
+table. Polls one or more openWB installations' `data/charge_log/*.json`
+over plain HTTP (no core changes, no auth needed), stores it in Postgres,
+lets you correct the cost per session against your own electricity
+price/provider, and renders a selectable-column PDF that stays
+reproducible even if the source data is edited later.
 
 <br clear="left">
 
@@ -71,7 +70,7 @@ flowchart LR
 
     subgraph browser["you"]
         ui["web UI"]
-        pdf["Dienstwagenabrechnung.pdf"]
+        pdf["Ladeprotokoll.pdf"]
     end
 
     chargelog -- "HTTP GET, per source/month" --> fetch

@@ -26,13 +26,16 @@ _template = _env.get_template("report_pdf.html")
 
 @dataclass
 class ReportMeta:
-    report_id: str  # a real id once persisted, or "Vorschau" for a preview
+    report_id: str  # a real id once persisted, or "Vorschau" for a preview -- used for the PDF
+    # filename/URL only, deliberately not shown in the document itself (see report_pdf.html):
+    # the user-given `title` below is what identifies a report to a human.
     title: str
     generated_at: datetime
     period_from: str | None
     period_to: str | None
     source_names: list[str]
     vehicle_names: list[str]
+    show_signature_line: bool = False
 
 
 def render_html(data: ReportData, meta: ReportMeta) -> str:

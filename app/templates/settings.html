@@ -24,14 +24,21 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .brand-mark { font-weight: 700; color: #16a34a; }
-  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
-  header a:hover { color: var(--accent); }
-  header .spacer { margin-left: auto; }
+  .nav-spacer { margin-left: auto; }
+  a.nav-btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; text-decoration: none;
+    display: inline-flex; align-items: center; cursor: pointer;
+  }
+  a.nav-btn:hover { border-color: var(--accent); }
+  a.nav-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   main { padding: 16px 20px; max-width: 960px; margin: 0 auto; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .panel-header h2 { font-size: 14px; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
   .panel h2 { font-size: 14px; margin: 0 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
   .panel .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -40,6 +47,7 @@
   .status-ok { color: var(--ok); }
   .status-error { color: var(--error); }
   form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .add-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   input[type=text], input[type=number], input[type=date], input[type=month], select {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 8px; font-size: 13px;
@@ -49,30 +57,36 @@
   button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   button:hover { border-color: var(--accent); }
   button.danger:hover { border-color: var(--error); color: var(--error); }
+  button.icon-btn {
+    width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 16px; line-height: 1;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .muted { color: var(--muted); font-size: 12px; }
+  .columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; margin-bottom: 12px; }
+  label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 </style>
 </head>
 <body>
 <header>
   <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
-  <a href="/">&larr; Übersicht</a>
-  <span class="spacer"></span>
-  <a href="/report-review">Bericht erstellen &rarr;</a>
+  <a href="/" class="nav-btn">&larr; Übersicht</a>
+  <span class="nav-spacer"></span>
+  <a href="/report-review" class="nav-btn primary">Bericht erstellen &rarr;</a>
 </header>
 <main>
   <div class="panel">
-    <h2>Quellen</h2>
+    <div class="panel-header">
+      <h2>Quellen</h2>
+      <button type="button" class="icon-btn" id="toggle-add-source" title="Quelle hinzufügen">+</button>
+    </div>
     <table id="sources-table">
       <thead>
         <tr><th>Name</th><th>Adresse</th><th>Aktiv</th><th>Letzter Abruf</th><th>Status</th><th></th></tr>
       </thead>
       <tbody id="sources-body"></tbody>
     </table>
-  </div>
-
-  <div class="panel">
-    <h2>Quelle hinzufügen</h2>
-    <form class="inline" id="add-source-form">
+    <form class="inline add-form" id="add-source-form" hidden>
       <input type="text" id="new-name" placeholder="Name (z.B. Zuhause)" required>
       <input type="text" id="new-base-url" placeholder="IP-Adresse oder URL" required>
       <button type="submit">Hinzufügen</button>
@@ -94,30 +108,48 @@
   </div>
 
   <div class="panel">
-    <h2>Preise</h2>
+    <div class="panel-header">
+      <h2>Preise</h2>
+      <button type="button" class="icon-btn" id="toggle-add-price" title="Preis hinzufügen">+</button>
+    </div>
     <table id="prices-table">
       <thead>
         <tr>
           <th>Anbieter</th><th>Preis/kWh</th><th>Quelle</th><th>Fahrzeug</th>
-          <th>Gültig ab</th><th>Gültig bis</th><th></th>
+          <th>Gültig ab</th><th>Gültig bis</th><th>Notiz</th><th></th>
         </tr>
       </thead>
       <tbody id="prices-body"></tbody>
     </table>
-  </div>
-
-  <div class="panel">
-    <h2>Preis hinzufügen</h2>
-    <form class="inline" id="add-price-form">
+    <form class="inline add-form" id="add-price-form" hidden>
       <input type="text" id="new-provider" placeholder="Anbieter" required>
       <input type="number" id="new-price-per-kwh" placeholder="EUR/kWh" step="0.0001" min="0" required>
       <select id="new-price-source"><option value="">Alle Quellen</option></select>
       <input type="text" id="new-price-vehicle" placeholder="Fahrzeug (leer = alle)">
       <input type="date" id="new-price-valid-from" required>
       <input type="date" id="new-price-valid-to" placeholder="Gültig bis (offen)">
+      <input type="text" id="new-price-notes" placeholder="Notiz (z.B. Vertrag, Tarifname)">
       <button type="submit">Hinzufügen</button>
     </form>
     <p class="muted" id="add-price-error"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Berichts-Einstellungen</h2>
+    <p class="hint">Gelten für neue Berichte in "Bericht erstellen" — bereits erzeugte PDFs sind davon nicht betroffen.</p>
+    <p class="muted" style="margin-top: 0;">PDF-Spalten (Vorauswahl)</p>
+    <div class="columns-grid" id="report-columns-grid"></div>
+    <form class="inline" id="report-settings-form">
+      <label>Kosten-Spalte zeigt:
+        <select id="cost-basis">
+          <option value="corrected">korrigierten Preis (Fallback: openWB)</option>
+          <option value="openwb">openWB-Wert</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="show-signature-line"> Unterschriftzeile im PDF</label>
+      <button type="submit" class="primary">Speichern</button>
+    </form>
+    <p class="muted" id="report-settings-result"></p>
   </div>
 </main>
 <script>
@@ -187,11 +219,38 @@ async function loadPrices() {
       <td>${p.vehicle_name || 'Alle'}</td>
       <td>${p.valid_from}</td>
       <td>${p.valid_to || 'offen'}</td>
+      <td>${p.notes || '–'}</td>
       <td><button data-action="delete-price" data-id="${p.id}" class="danger">Löschen</button></td>
     `;
     body.appendChild(tr);
   }
 }
+
+async function loadReportSettings() {
+  const { columns } = await api('/api/report-columns');
+  const settings = await api('/api/report-settings');
+  const grid = document.getElementById('report-columns-grid');
+  grid.innerHTML = '';
+  for (const c of columns) {
+    const checked = settings.default_columns.includes(c.key);
+    const label = document.createElement('label');
+    label.className = 'check';
+    label.innerHTML = `<input type="checkbox" data-column="${c.key}" ${checked ? 'checked' : ''}> ${c.label}`;
+    grid.appendChild(label);
+  }
+  document.getElementById('cost-basis').value = settings.cost_basis;
+  document.getElementById('show-signature-line').checked = settings.show_signature_line;
+}
+
+document.getElementById('toggle-add-source').addEventListener('click', () => {
+  const form = document.getElementById('add-source-form');
+  form.hidden = !form.hidden;
+});
+
+document.getElementById('toggle-add-price').addEventListener('click', () => {
+  const form = document.getElementById('add-price-form');
+  form.hidden = !form.hidden;
+});
 
 document.getElementById('sources-body').addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button');
@@ -227,6 +286,7 @@ document.getElementById('add-source-form').addEventListener('submit', async (ev)
       body: JSON.stringify({ name, base_url }),
     });
     ev.target.reset();
+    ev.target.hidden = true;
     loadSources();
   } catch (err) {
     errEl.textContent = err.message;
@@ -269,6 +329,7 @@ document.getElementById('add-price-form').addEventListener('submit', async (ev) 
   const vehicle_name = document.getElementById('new-price-vehicle').value || null;
   const valid_from = document.getElementById('new-price-valid-from').value;
   const valid_to = document.getElementById('new-price-valid-to').value || null;
+  const notes = document.getElementById('new-price-notes').value || null;
   const errEl = document.getElementById('add-price-error');
   errEl.textContent = '';
   try {
@@ -276,18 +337,41 @@ document.getElementById('add-price-form').addEventListener('submit', async (ev) 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        provider, price_per_kwh, vehicle_name, valid_from, valid_to,
+        provider, price_per_kwh, vehicle_name, valid_from, valid_to, notes,
         source_id: sourceVal ? parseInt(sourceVal, 10) : null,
       }),
     });
     ev.target.reset();
+    ev.target.hidden = true;
     loadPrices();
   } catch (err) {
     errEl.textContent = err.message;
   }
 });
 
+document.getElementById('report-settings-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const default_columns = Array.from(
+    document.querySelectorAll('#report-columns-grid input[type=checkbox]:checked')
+  ).map((el) => el.dataset.column);
+  const cost_basis = document.getElementById('cost-basis').value;
+  const show_signature_line = document.getElementById('show-signature-line').checked;
+  const resultEl = document.getElementById('report-settings-result');
+  resultEl.textContent = '';
+  try {
+    await api('/api/report-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ default_columns, cost_basis, show_signature_line }),
+    });
+    resultEl.textContent = 'Gespeichert.';
+  } catch (err) {
+    resultEl.textContent = 'Fehler: ' + err.message;
+  }
+});
+
 loadSources().then(loadPrices);
+loadReportSettings();
 </script>
 </body>
 </html>
