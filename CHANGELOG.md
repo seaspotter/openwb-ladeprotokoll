@@ -17,6 +17,15 @@ what that means in practice for this project.
   <title>.pdf"` (date-prefixed so files sort chronologically) instead of
   the old `"ladeprotokoll-<id>.pdf"`.
 
+### Fixed
+- Settings modal showed two nested scrollbars once its content overflowed
+  (`dialog#settings-modal` had a `max-height` but no `overflow: hidden`,
+  and `.modal-body`'s own scroll area was a hardcoded `calc(88vh - 56px)`
+  guess at the header's height, which could fall short and leave both the
+  dialog and the body scrollable at once). Restructured as a flex column
+  (header `flex-shrink: 0`, body `flex: 1; min-height: 0`) so only
+  `.modal-body` ever scrolls, regardless of the header's actual height.
+
 ### Changed
 - Third real-usage feedback round (2026-09-04, same day, after a PDF
   header screenshot and a side-by-side comparison with openwb-logger):

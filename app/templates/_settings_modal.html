@@ -14,14 +14,24 @@
     padding: 0;
     background: var(--bg);
     color: var(--text);
+    /* flex column + overflow:hidden here, flex:1 + its own overflow-y on
+       .modal-body below -- lets the body's scroll area size itself off
+       the header's actual rendered height instead of a hardcoded
+       `calc(88vh - 56px)` guess, which could be a few px short of the
+       real header height and left both the dialog and .modal-body
+       scrollable at once (two nested scrollbars for one panel). */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   dialog#settings-modal::backdrop { background: rgba(0, 0, 0, 0.45); }
   .modal-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 18px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .modal-header h2 { margin: 0; font-size: 15px; }
-  .modal-body { padding: 4px 18px 18px; overflow-y: auto; max-height: calc(88vh - 56px); }
+  .modal-body { padding: 4px 18px 18px; overflow-y: auto; flex: 1; min-height: 0; }
   .modal-body .panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
     padding: 14px; margin: 14px 0;
