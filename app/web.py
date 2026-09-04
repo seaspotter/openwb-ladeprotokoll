@@ -212,7 +212,7 @@ def _price_entry_for_matching(r) -> PriceEntry:
 @router.get("/api/prices")
 async def api_list_prices():
     pool = get_pool()
-    rows = await pool.fetch("SELECT * FROM price_entries ORDER BY created_at DESC")
+    rows = await pool.fetch("SELECT * FROM price_entries ORDER BY valid_from DESC")
     return {"prices": [_price_row(r) for r in rows]}
 
 
