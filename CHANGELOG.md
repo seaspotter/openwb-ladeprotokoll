@@ -15,6 +15,13 @@ what that means in practice for this project.
   `openwb://sources`/`openwb://report-columns` resources for discovering
   valid parameter values. No new authentication -- same no-auth, LAN-trust
   model as the web UI.
+- Monthly/yearly statistics at `/statistik` (`app/statistics.py`): total
+  energy and cost per period, plus the grid/PV/battery/chargepoint split
+  as absolute kWh (not an averaged percentage, which would misrepresent
+  the mix once session sizes vary a lot). Two Chart.js bar charts
+  (vendored locally as `app/static/chart.umd.min.js`, not CDN-loaded --
+  this app otherwise has zero external network dependencies and should
+  keep working on a fully offline LAN).
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI
@@ -22,6 +29,11 @@ what that means in practice for this project.
 - `web.py`'s session-query and report-generation logic extracted into
   `_query_sessions`/`_generate_report` module functions, shared by the
   HTTP routes and the new MCP tools rather than duplicated.
+- `_query_sessions` now converts `energy_kwh`/`cost_openwb`/every
+  `power_source_*_pct` field to plain `float` before returning, not just
+  the price-matching-derived fields -- needed once `statistics.py` started
+  doing real arithmetic on them (a bare `Decimal`, which is what asyncpg
+  returns for `NUMERIC` columns, doesn't arithmetic against a `float`).
 
 ## [0.1.0] - 2026-09-04
 

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Statistik – openWB Ladeprotokoll</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2316a34a'/%3E%3Cpath d='M13 3 5 14h5l-1 7 8-11h-5z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --border: #d8dbe2;
+    --text: #1a1d24; --muted: #6b7280; --accent: #2563eb;
+    --ok: #1e7a42; --error: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+      --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+      --ok: #5fbd82; --error: #e5675f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+    --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+    --ok: #5fbd82; --error: #e5675f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .brand-mark { font-weight: 700; color: #16a34a; }
+  .nav-spacer { margin-left: auto; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  a.nav-btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px; text-decoration: none;
+    display: inline-flex; align-items: center; cursor: pointer;
+  }
+  a.nav-btn:hover { border-color: var(--accent); }
+  main { padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .totals-grid .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .totals-grid .stat .label { font-size: 11px; color: var(--muted); }
+  .totals-grid .stat .value { font-size: 15px; font-weight: 600; }
+  .chart-wrap { position: relative; height: 320px; }
+  .empty-hint { padding: 24px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<script>
+try {
+  const stored = localStorage.getItem('theme');
+  if (stored) document.documentElement.dataset.theme = stored;
+} catch (e) {}
+</script>
+<header>
+  <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  <a href="/" class="nav-btn">&larr; Übersicht</a>
+  <span class="nav-spacer"></span>
+  <div class="header-actions">
+    <button type="button" class="header-icon-btn" id="theme-toggle" data-theme-toggle title="Hell/Dunkel"></button>
+    <button type="button" class="header-icon-btn" data-open-settings title="Einstellungen">&#9881;</button>
+  </div>
+</header>
+<main>
+  <div class="panel">
+    <h2>Filter</h2>
+    <form class="inline" id="filter-form">
+      <select id="filter-source"><option value="">Alle Quellen</option></select>
+      <select id="filter-vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="granularity">
+        <option value="month">Monatlich</option>
+        <option value="year">Jährlich</option>
+      </select>
+      <button type="submit">Laden</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Summe</h2>
+    <div class="totals-grid">
+      <div class="stat"><div class="label">Ladevorgänge</div><div class="value" id="stat-sessions">–</div></div>
+      <div class="stat"><div class="label">Energie</div><div class="value" id="stat-energy">–</div></div>
+      <div class="stat"><div class="label">Kosten</div><div class="value" id="stat-cost">–</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Energiequellen (kWh)</h2>
+    <div class="chart-wrap"><canvas id="chart-energy"></canvas></div>
+    <p class="empty-hint" id="empty-hint" hidden>Noch keine Ladevorgänge für diese Auswahl.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Kosten</h2>
+    <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
+  </div>
+</main>
+{% include "_settings_modal.html" %}
+<script src="/static/chart.umd.min.js"></script>
+<script>
+function fmtNum(value, decimals, suffix) {
+  if (value === null || value === undefined) return '–';
+  return value.toFixed(decimals).replace('.', ',') + (suffix || '');
+}
+
+async function loadSourceFilter() {
+  const { sources } = await api('/api/sources');
+  const select = document.getElementById('filter-source');
+  for (const s of sources) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  }
+}
+
+async function loadVehicleFilter() {
+  const { vehicles } = await api('/api/vehicles');
+  const select = document.getElementById('filter-vehicle');
+  for (const v of vehicles) {
+    const opt = document.createElement('option');
+    opt.value = v.vehicle_name;
+    opt.textContent = v.vehicle_name;
+    select.appendChild(opt);
+  }
+}
+
+function chartColors() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    text: style.getPropertyValue('--text').trim() || '#1a1d24',
+    muted: style.getPropertyValue('--muted').trim() || '#6b7280',
+    grid: style.getPropertyValue('--border').trim() || '#d8dbe2',
+  };
+}
+
+let chartEnergy = null;
+let chartCost = null;
+
+async function loadStatistics() {
+  const params = new URLSearchParams();
+  const sourceId = document.getElementById('filter-source').value;
+  const vehicle = document.getElementById('filter-vehicle').value;
+  const granularity = document.getElementById('granularity').value;
+  if (sourceId) params.set('source_id', sourceId);
+  if (vehicle) params.set('vehicle', vehicle);
+  params.set('granularity', granularity);
+
+  const { periods } = await api('/api/statistics?' + params.toString());
+  document.getElementById('empty-hint').hidden = periods.length > 0;
+
+  const totalSessions = periods.reduce((a, p) => a + p.session_count, 0);
+  const totalEnergy = periods.reduce((a, p) => a + p.energy_kwh, 0);
+  const totalCost = periods.reduce((a, p) => a + p.cost, 0);
+  document.getElementById('stat-sessions').textContent = totalSessions;
+  document.getElementById('stat-energy').textContent = fmtNum(totalEnergy, 1, ' kWh');
+  document.getElementById('stat-cost').textContent = fmtNum(totalCost, 2, ' €');
+
+  const colors = chartColors();
+  const labels = periods.map((p) => p.period);
+  const tickOptions = { color: colors.muted };
+  const gridOptions = { color: colors.grid };
+  const legendOptions = { position: 'bottom', labels: { color: colors.text } };
+
+  if (chartEnergy) chartEnergy.destroy();
+  chartEnergy = new Chart(document.getElementById('chart-energy'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Netz', data: periods.map((p) => p.energy_grid_kwh), backgroundColor: '#6b7280' },
+        { label: 'PV', data: periods.map((p) => p.energy_pv_kwh), backgroundColor: '#16a34a' },
+        { label: 'Speicher', data: periods.map((p) => p.energy_bat_kwh), backgroundColor: '#f59e0b' },
+        { label: 'Ladepunkt', data: periods.map((p) => p.energy_cp_kwh), backgroundColor: '#2563eb' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: tickOptions, grid: gridOptions },
+        y: { stacked: true, ticks: tickOptions, grid: gridOptions, title: { display: true, text: 'kWh', color: colors.muted } },
+      },
+      plugins: { legend: legendOptions },
+    },
+  });
+
+  if (chartCost) chartCost.destroy();
+  chartCost = new Chart(document.getElementById('chart-cost'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Kosten', data: periods.map((p) => p.cost), backgroundColor: '#2563eb' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: tickOptions, grid: gridOptions },
+        y: { ticks: tickOptions, grid: gridOptions, title: { display: true, text: '€', color: colors.muted } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+document.getElementById('filter-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  loadStatistics();
+});
+
+(async function init() {
+  await loadSourceFilter();
+  await loadVehicleFilter();
+  await loadStatistics();
+})();
+</script>
+</body>
+</html>

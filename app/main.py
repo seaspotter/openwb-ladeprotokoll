@@ -12,8 +12,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from .db import close_pool, init_pool
 from .mcp_server import mcp
@@ -42,3 +44,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="openwb-ladeprotokoll", lifespan=lifespan)
 app.include_router(router)
 app.mount("/mcp", mcp.streamable_http_app())
+# Vendored, not CDN-loaded -- this app has no external network dependency
+# anywhere else (every icon is inline SVG), and the statistik page's
+# Chart.js should keep working on a fully offline LAN. See DEPLOYMENT.md.
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

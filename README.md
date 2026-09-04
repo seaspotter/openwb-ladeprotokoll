@@ -57,6 +57,10 @@ shipped and what's next.
 - **MCP server** at `/mcp` for AI assistants — `search_sessions` and
   `generate_report`, same data and same no-auth trust model as the web
   UI — see [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Monthly/yearly statistics** at `/statistik`: total energy and cost
+  over time, plus how much of it came from grid vs. PV vs. battery vs.
+  the chargepoint itself — as absolute kWh, not an averaged percentage
+  that would misrepresent the mix once session sizes vary.
 
 ## How it works
 

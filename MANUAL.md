@@ -12,7 +12,7 @@ Auf jeder Seite rechts oben:
   Quellen oder ältere Monate siehe Einstellungen → Verlauf abrufen.
 - **Sonne/Mond-Symbol** — wechselt zwischen hellem und dunklem Design; die
   Wahl wird im Browser gemerkt (pro Browser, nicht serverseitig) und gilt
-  für alle drei Seiten.
+  seitenübergreifend.
 - **Zahnrad-Symbol (Einstellungen)** — öffnet die Einstellungen als
   Dialogfenster über der aktuellen Seite (kein Seitenwechsel nötig).
 
@@ -165,6 +165,26 @@ immer einen neuen, eigenständigen Bericht an — die zum jeweiligen
 Zeitpunkt verwendeten Ladevorgangs- und Preisdaten sind darin eingefroren
 und bleiben auch dann unverändert, wenn die zugrunde liegenden Daten
 oder die Berichts-Einstellungen später geändert werden.
+
+## Statistik
+
+Über "Statistik" in der Kopfzeile (Übersicht und "Bericht erstellen").
+Zeigt, wie viel geladen wurde, was es gekostet hat, und woher die Energie
+kam — monatlich oder jährlich zusammengefasst.
+
+- **Filter** — optional nach Quelle und/oder Fahrzeug eingrenzen, sowie
+  Monatlich/Jährlich wählen, dann "Laden".
+- **Summe** — Ladevorgänge, Energie und Kosten über den gesamten
+  angezeigten Zeitraum.
+- **Energiequellen (kWh)** — gestapeltes Balkendiagramm pro Zeitraum:
+  Netz, PV, Speicher, Ladepunkt. Die Balken zeigen die tatsächlich
+  geladene Energiemenge je Quelle, nicht einen gemittelten Prozentwert —
+  ein einzelner sehr großer Ladevorgang mit viel PV-Anteil verschiebt das
+  Bild also stärker als mehrere kleine Ladevorgänge mit wenig PV-Anteil,
+  was der Realität eher entspricht als eine einfache Durchschnittsbildung.
+- **Kosten** — Balkendiagramm pro Zeitraum, zeigt dieselbe "Kosten"-Größe
+  wie überall sonst in der Anwendung (openWB-Wert oder korrigiert, je
+  nach Berichts-Einstellungen → Kosten-Spalte zeigt).
 
 ## Self-Update
 

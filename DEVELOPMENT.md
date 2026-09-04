@@ -66,8 +66,9 @@ pytest
 
 Everything under `tests/` exercises pure logic only (`chargelog_parse.py`,
 `sources.py`, `price_entries.py`, `report_build.py`, `report_settings.py`,
-`app_settings.py`, and `scheduler.py`'s time-math helpers) — no database
-or network required, deliberately, so the suite stays fast. HTTP fetching,
+`app_settings.py`, `statistics.py`, and `scheduler.py`'s time-math
+helpers) — no database or network required, deliberately, so the suite
+stays fast. HTTP fetching,
 DB upserts, and PDF rendering are integration-level concerns without an
 automated suite entry, but see the next section for how to actually
 exercise them against a real database without `docker compose up`.
@@ -123,10 +124,13 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
 | `app/mcp_server.py` | MCP server (`FastMCP`) mounted at `/mcp` -- `search_sessions`/`generate_report` tools, thin wrappers around `web.py`'s `_query_sessions`/`_generate_report` |
+| `app/statistics.py` | Pure: enriched sessions -> per-month/year `PeriodStats` (energy, cost, absolute grid/PV/battery/chargepoint kWh split) for `/statistik` |
+| `app/static/chart.umd.min.js` | Vendored Chart.js (not CDN-loaded -- see `main.py`'s `/static` mount comment), served for `/statistik`'s charts |
 | `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" + a persistent "Letzter Abruf" freshness line |
 | `app/templates/_settings_modal.html` | Jinja partial (no route): Quellen (incl. automatic-fetch on/off + time), Preise, Fahrzeuge (Kennzeichen), Verlauf abrufen, Berichts-Einstellungen, all in a `<dialog>` popup |
 | `app/templates/report_review.html` | Session/price-override selection UI, at `/report-review` |
 | `app/templates/report_pdf.html` | The actual report layout — rendered as both the HTML preview and the PDF |
+| `app/templates/statistik.html` | Monthly/yearly statistics + Chart.js charts, at `/statistik` |
 
 ## Data-format notes
 

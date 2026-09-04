@@ -27,6 +27,8 @@ from .report_settings import ReportSettingsError
 from .report_settings import get_settings as get_report_settings
 from .report_settings import update_settings as update_report_settings
 from .sources import SourceValidationError, normalize_base_url, validate_name
+from .statistics import StatisticsError
+from .statistics import aggregate as aggregate_statistics
 from .updater import check_for_update, get_current_version, run_update, self_update_available
 
 router = APIRouter()
@@ -91,6 +93,11 @@ async def index(request: Request):
 @router.get("/report-review", response_class=HTMLResponse)
 async def report_review(request: Request):
     return templates.TemplateResponse("report_review.html", {"request": request})
+
+
+@router.get("/statistik", response_class=HTMLResponse)
+async def statistik(request: Request):
+    return templates.TemplateResponse("statistik.html", {"request": request})
 
 
 @router.get("/api/sources")
@@ -333,6 +340,19 @@ async def _query_sessions(
             energy_kwh=energy_kwh,
             cost_openwb=cost_openwb,
         )
+        # asyncpg returns NUMERIC as Decimal -- these fields go out as
+        # plain JSON numbers over HTTP either way, but statistics.py's
+        # aggregate() does real float arithmetic on them (energy_kwh *
+        # power_source_pv_pct), which raises TypeError against a Decimal.
+        # Converting once here, not per-consumer, keeps every field in
+        # this dict a plain float/None consistently.
+        d["energy_kwh"] = energy_kwh
+        d["cost_openwb"] = cost_openwb
+        for pct_key in (
+            "power_source_grid_pct", "power_source_cp_pct",
+            "power_source_bat_pct", "power_source_pv_pct",
+        ):
+            d[pct_key] = _to_float(r[pct_key])
         d["price_entry_id"] = decision.price_entry["id"] if decision.price_entry else None
         d["price_provider"] = decision.price_entry["provider"] if decision.price_entry else None
         d["cost_corrected"] = decision.cost_corrected
@@ -387,6 +407,29 @@ async def api_update_vehicle(vehicle_name: str, body: VehicleIn):
         vehicle_name, body.license_plate,
     )
     return {"vehicle_name": row["vehicle_name"], "license_plate": row["license_plate"]}
+
+
+@router.get("/api/statistics")
+async def api_statistics(
+    granularity: str = "month",
+    source_id: int | None = None,
+    vehicle: str | None = None,
+):
+    """Per-month or per-year aggregates (energy, cost, grid/PV/battery/
+    chargepoint kWh split) for the /statistik page's charts. Reuses
+    _query_sessions for the actual data (same price-decision enrichment
+    the overview/review pages already show) and report_settings'
+    cost_basis for which cost figure to sum -- one "Kosten" total, same
+    simplification as report_build.py, not openWB/corrected side by
+    side."""
+    pool = get_pool()
+    settings = await get_report_settings(pool)
+    sessions = await _query_sessions(pool, source_id, vehicle, None, None, None)
+    try:
+        periods = aggregate_statistics(sessions, granularity, settings["cost_basis"])
+    except StatisticsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"periods": [vars(p) for p in periods]}
 
 
 @router.get("/api/report-columns")

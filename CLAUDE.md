@@ -138,6 +138,19 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   fresh `GET` (simulating a page reload), since a user once reported
   settings "not remembered" (root cause was the now-removed duplicate
   column picker on `report_review.html`, not this module).
+- `app/statistics.py` — **pure**: sessions (already enriched with a price
+  decision, exactly `_query_sessions`'s return shape) -> per-month or
+  per-year `PeriodStats` for the `/statistik` page's charts. The energy-
+  source split (grid/PV/battery/chargepoint) is **absolute kWh per
+  period** (`energy_kwh * power_source_pv_pct/100`, summed), not an
+  averaged percentage — averaging each session's own percentage directly
+  would misrepresent the mix once session sizes vary a lot (a 2 kWh
+  all-grid top-up and a 40 kWh mostly-PV session shouldn't count
+  equally toward "average PV share"); unit tested specifically for this
+  distinction. `cost` follows the same one-column simplification
+  `report_build.py` uses (`cost_basis` picks `cost_openwb` or the
+  already-fallback-aware `cost_used`, never both side by side). Unit
+  tested.
 - `app/pdf_render.py` — Jinja2 (`templates/report_pdf.html`) + WeasyPrint.
   One template renders both the HTML preview and the actual PDF — `@page`
   rules WeasyPrint honors are simply ignored by a browser. The page is
@@ -183,12 +196,20 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `patch: dict` + `validate()`-raises-400 pattern as report-settings, not
   a pydantic model — needed since it's a partial update of two unrelated
   fields), session listing (enriched with each session's matched
-  price decision; filterable by source/vehicle/**chargepoint**/date), and
-  report preview/generate/list/pdf/delete. Plain parameterized SQL via
-  asyncpg, no ORM. asyncpg returns `NUMERIC` columns as `Decimal`; anything
-  feeding `price_entries.py`/`report_build.py` converts to `float` first
-  (`_to_float`), since those modules are written and tested against plain
-  floats. A generated report is built in two DB steps: insert the
+  price decision; filterable by source/vehicle/**chargepoint**/date),
+  `GET /api/statistics` (`statistics.py`'s `aggregate()` over
+  `_query_sessions`'s output, `report_settings`'s `cost_basis` for which
+  cost figure to sum), and report preview/generate/list/pdf/delete. Plain
+  parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns
+  as `Decimal`; anything feeding `price_entries.py`/`report_build.py`/
+  `statistics.py` converts to `float` first (`_to_float`, and
+  `_query_sessions` now converts `energy_kwh`/`cost_openwb`/every
+  `power_source_*_pct` field to `float` before returning — added
+  specifically because `statistics.py`'s `aggregate()` does real
+  arithmetic on them, which raises `TypeError` against a bare `Decimal`;
+  earlier only the price-matching-derived fields were guaranteed float),
+  since those modules are written and tested against plain floats. A
+  generated report is built in two DB steps: insert the
   `reports` row first (to get a real id, needed for the PDF's
   filename/URL even though the document body itself no longer shows it),
   *then* render the PDF and `UPDATE` the row with the bytes — one
@@ -224,7 +245,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `WORKDIR`.
 - `app/main.py` — app factory, lifespan (DB pool, starts/cancels the
   scheduler task, enters `mcp.session_manager.run()` since mounting
-  `mcp_server.py`'s app disables its own built-in lifespan).
+  `mcp_server.py`'s app disables its own built-in lifespan). Mounts
+  `/static` (`app/static/`) for the vendored Chart.js the `/statistik`
+  page uses — vendored rather than CDN-loaded deliberately, since this is
+  otherwise the only external-network dependency anywhere in the app
+  (every icon is inline SVG); a CDN script would silently stop working on
+  a fully offline LAN, which this app is explicitly designed to run on.
 - `app/mcp_server.py` — MCP server (`FastMCP`, Streamable HTTP transport)
   mounted at `/mcp` on the same FastAPI app/port, identical pattern to
   `openwb-logger/app/mcp_server.py`. Two tools: `search_sessions` and
@@ -331,12 +357,24 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `_settings_modal.html` above for why) — `web.py` falls back to
   `report_settings`'s `default_columns` whenever `columns` is omitted.
   Keep new UI copy in German too.
+- `app/templates/statistik.html` — monthly/yearly statistics at
+  `/statistik`: source/vehicle filter + a granularity `<select>`
+  (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as
+  `report_review.html`), and two Chart.js bar charts fed by `GET
+  /api/statistics` — a stacked one for the grid/PV/battery/chargepoint kWh
+  split, a plain one for cost. Chart colors (`chartColors()`) are read
+  from the page's own CSS custom properties (`--text`/`--muted`/
+  `--border`) at chart-creation time so both themes render correctly —
+  picked once per `loadStatistics()` call, not live-updated on a theme
+  toggle mid-session (reload picks up the new theme; deliberately not
+  worth the added complexity of hooking into `_settings_modal.html`'s
+  shared toggle handler for a live re-render).
 
 Header navigation is consistent across pages: a secondary "back" link on
 the left where relevant (`← Übersicht`; `index.html` has none, it *is*
 "back"), the gear/theme icon pair on the right, and (`index.html` only)
-"Jetzt abrufen" plus "Bericht erstellen →" — both plain flat buttons like
-everything else, no accent-filled "primary" style (see
+"Jetzt abrufen", "Statistik", and "Bericht erstellen →" — all plain flat
+buttons like everything else, no accent-filled "primary" style (see
 `_settings_modal.html` above); `report_review.html`'s own in-page "Bericht
 erzeugen" button is styled the same way.
 - An MCP endpoint at `/mcp` — see `app/mcp_server.py` above.

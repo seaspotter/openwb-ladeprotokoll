@@ -120,15 +120,18 @@ open an issue or just start working if something here matters to you.
       one implementation). Dropped the standalone CSV-export roadmap item
       per explicit user feedback (2026-09-04) — openWB's own UI already
       offers a CSV export directly, no need to duplicate it here.
+- [x] Monthly/yearly statistics with a chart (`/statistik`,
+      `app/statistics.py`): total energy and cost, plus the grid/PV/
+      battery/chargepoint split as absolute kWh per period, not an
+      averaged percentage (see `app/statistics.py`'s docstring for why
+      that distinction matters). Charts via Chart.js, vendored locally
+      (`app/static/chart.umd.min.js`) rather than CDN-loaded, since this
+      app otherwise has zero external network dependencies anywhere and
+      should keep working on a fully offline LAN.
 
 ## Next
 
-- [ ] Monthly/yearly statistics with a chart — total kWh, total cost, and
-      the PV/grid/battery/chargepoint share (the `power_source_*_pct`
-      columns already exist in `sessions`, unused for anything but display
-      today) aggregated over time, not just per-report totals. New page,
-      client-side charting (no server-rendered image needed since this
-      isn't part of the immutable PDF).
+Nothing queued right now — see "Someday / maybe" below.
 
 ## Someday / maybe
 
