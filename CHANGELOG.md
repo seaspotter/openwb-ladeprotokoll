@@ -28,6 +28,15 @@ what that means in practice for this project.
   <title>.pdf"` (date-prefixed so files sort chronologically) instead of
   the old `"ladeprotokoll-<id>.pdf"`.
 
+### Changed
+- PDF: the "Kosten" cell no longer gets the red highlight for a session
+  whose corrected cost diverges from openWB's own value — that stays on
+  the overview/review pages (still useful there for deciding what to
+  include), but doesn't belong on the final immutable document. Header
+  logo-to-title gap widened again, `22px` -> `36px` — still looked too
+  close in a follow-up screenshot even after confirming the PDF really was
+  using the already-widened template.
+
 ### Fixed
 - Settings modal couldn't be closed: the double-scrollbar fix below added
   an unqualified `dialog#settings-modal { display: flex }` rule, which

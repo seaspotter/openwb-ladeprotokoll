@@ -24,7 +24,7 @@
     font-size: 10.5px; line-height: 1.4;
   }
   header.doc-header {
-    display: flex; align-items: center; gap: 22px;
+    display: flex; align-items: center; gap: 36px;
     border-bottom: 2px solid #16a34a; padding-bottom: 10px; margin-bottom: 14px;
   }
   header.doc-header img { width: 40px; height: 40px; }
@@ -53,7 +53,6 @@
   table.sessions thead { display: table-header-group; }
   table.sessions tbody tr { page-break-inside: avoid; }
   table.sessions td.numeric, table.totals td.numeric { text-align: right; }
-  table.sessions td.flagged { color: #b91c1c; font-weight: 600; }
 
   table.totals td.label { font-weight: 600; background: #f5f6f8; }
 
@@ -129,7 +128,7 @@
     {% for row in data.rows %}
     <tr>
       {% for col in data.columns %}
-      <td class="{{ 'flagged' if row.delta_flagged and col == 'cost' else '' }}">{{ row.cells[col] }}</td>
+      <td>{{ row.cells[col] }}</td>
       {% endfor %}
     </tr>
     {% endfor %}

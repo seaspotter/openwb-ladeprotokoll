@@ -155,16 +155,28 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   source data afterward don't affect this already-generated document"
   follow-up sentence was cut per user feedback — the document being
   immutable is already true and doesn't need spelling out twice). The
-  header's logo-to-title gap is `gap: 22px` on `header.doc-header`, not a
-  tight default — a user screenshot showed the two crowded together at a
-  smaller value. The document deliberately never displays its own
-  `report_id` — only the user-given `title` — per user feedback that a bare
-  "Bericht 3" was meaningless; the id still drives the PDF's filename/URL
-  behind the scenes. `ReportMeta.vehicle_names` (`web.py`'s `_report_meta`)
-  is already-formatted display strings, not bare names — each vehicle with
-  a `vehicles.license_plate` set is rendered `"<name> (<plate>)"` in the
+  header's logo-to-title gap is `gap: 36px` on `header.doc-header` (went
+  12px -> 22px -> 36px across two rounds of user feedback from actual
+  screenshots — 22px still read as "too close" to the user even after
+  confirming via the disclaimer text that the PDF really was rendered with
+  the current template, not a stale one; don't shrink this back down
+  without a real screenshot showing it's now too loose). The document
+  deliberately never displays its own `report_id` — only the user-given
+  `title` — per user feedback that a bare "Bericht 3" was meaningless; the
+  id still drives the PDF's filename/URL behind the scenes.
+  `ReportMeta.vehicle_names` (`web.py`'s `_report_meta`) is
+  already-formatted display strings, not bare names — each vehicle with a
+  `vehicles.license_plate` set is rendered `"<name> (<plate>)"` in the
   "Fahrzeug(e)" meta line, so the Kennzeichen ends up documented on every
-  report without needing its own column.
+  report without needing its own column. The "Kosten" column/cell never
+  gets the red `.flagged` styling that `index.html`/`report_review.html`
+  use for a session whose corrected cost diverges from openWB's own value
+  — that highlighting is deliberately a review-time aid for deciding what
+  to include in a report, not something that belongs in the final,
+  immutable document itself (explicit user feedback after seeing it in a
+  generated PDF); `row.delta_flagged` is still computed and present in
+  `ReportData` for the pages that do use it, the PDF template just ignores
+  it.
 - `app/web.py` — FastAPI routes for source CRUD, fetch triggers, price
   entry CRUD (including price-entry `notes`), vehicle Kennzeichen CRUD,
   report-settings, app-settings (`GET/PUT /api/app-settings`, the same raw
