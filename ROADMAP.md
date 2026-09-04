@@ -54,21 +54,41 @@ open an issue or just start working if something here matters to you.
       project's: an IP address conflict with an unrelated macvlan Docker
       container elsewhere on the user's LAN, not a bug here.
 - [x] First real-usage feedback round, all shipped: dashboard split into
-      a read-only overview (`/`) and a `/settings` page (sources, prices,
-      backfill, and new "Berichts-Einstellungen"); source/price entry
-      add-forms collapsed behind a "+" icon; price entries gained a
-      `notes` field, now shown in the UI; vehicle/chargepoint filters
-      became dropdowns (index + report-review) instead of free text, and
-      report-review gained a chargepoint filter; the PDF's two "Kosten"
-      columns collapsed into one, driven by a new `cost_basis` setting
-      ("openwb" or "corrected"); default page orientation flipped back to
-      **portrait**; "Dienstwagenabrechnung" removed everywhere (code,
-      docs, PDF) per explicit request; the PDF no longer shows its own
-      report id, only the user-given title; rows in the PDF sort
-      chronologically ascending (latest at the bottom); "Entladene
-      Energie" is hidden in the totals when zero; the signature line is
-      now off by default and toggleable in settings; header nav across
-      all three pages uses consistent button styling.
+      a read-only overview (`/`) and a source/price/backfill/Berichts-
+      Einstellungen area (initially its own `/settings` page — see the
+      *second* feedback round below, which turned this into a modal
+      instead); source/price entry add-forms collapsed behind a "+" icon;
+      price entries gained a `notes` field, now shown in the UI;
+      vehicle/chargepoint filters became dropdowns (index + report-review)
+      instead of free text, and report-review gained a chargepoint filter;
+      the PDF's two "Kosten" columns collapsed into one, driven by a new
+      `cost_basis` setting ("openwb" or "corrected"); default page
+      orientation flipped back to **portrait**; "Dienstwagenabrechnung"
+      removed everywhere (code, docs, PDF) per explicit request; the PDF
+      no longer shows its own report id, only the user-given title; rows
+      in the PDF sort chronologically ascending (latest at the bottom);
+      "Entladene Energie" is hidden in the totals when zero; the
+      signature line is now off by default and toggleable in settings;
+      header nav across all three pages uses consistent button styling.
+- [x] Second real-usage feedback round (same day, after looking at an
+      actual generated PDF with real data and screenshots of the UI):
+      Einstellungen became a `<dialog>` popup (`_settings_modal.html`,
+      opened via a `⚙️` header button) instead of a separate `/settings`
+      page, matching this author's other projects; added an explicit
+      🌙/☀️ theme toggle (`localStorage`-persisted, on top of the existing
+      `prefers-color-scheme` default); moved "Jetzt abrufen" into the
+      header on `/`; removed the second, duplicate PDF-column picker that
+      had existed on `/report-review` (Berichts-Einstellungen is now the
+      only place columns are chosen — the duplication was the likely
+      cause of an earlier "settings aren't remembered" report, since a
+      per-request override there could look like a forgotten setting);
+      reordered the settings panels to Quellen, Preise, Verlauf abrufen
+      (was Quellen, Verlauf abrufen, Preise); added an `orientation`
+      setting (portrait/landscape) so the earlier portrait-vs-landscape
+      backtracking has a real answer instead of a hardcoded guess; fixed
+      a real shipped bug where the source/price "+"-toggled add-forms
+      never actually stayed hidden, because `.inline { display: flex }`
+      beat the browser's own `[hidden]` rule on specificity.
 
 ## Next
 

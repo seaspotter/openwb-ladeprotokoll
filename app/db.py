@@ -174,9 +174,16 @@ _SCHEMA_STATEMENTS = [
         default_columns JSONB NOT NULL,
         cost_basis TEXT NOT NULL,
         show_signature_line BOOLEAN NOT NULL,
+        orientation TEXT NOT NULL DEFAULT 'portrait',
         CHECK (id = 1)
     );
     """,
+    # Added after report_settings already existed on some deployments (this
+    # project's own test container included) -- CREATE TABLE IF NOT EXISTS
+    # above is a no-op there, so the column has to be added explicitly. The
+    # DEFAULT backfills any existing row.
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS orientation TEXT "
+    "NOT NULL DEFAULT 'portrait';",
 ]
 
 

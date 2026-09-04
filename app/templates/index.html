@@ -28,6 +28,7 @@
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .brand-mark { font-weight: 700; color: #16a34a; }
   .nav-spacer { margin-left: auto; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
   a.nav-btn {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 10px; font-size: 13px; text-decoration: none;
@@ -59,11 +60,21 @@
 </style>
 </head>
 <body>
+<script>
+try {
+  const stored = localStorage.getItem('theme');
+  if (stored) document.documentElement.dataset.theme = stored;
+} catch (e) {}
+</script>
 <header>
   <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
-  <a href="/settings" class="nav-btn">Einstellungen</a>
   <span class="nav-spacer"></span>
-  <a href="/report-review" class="nav-btn primary">Bericht erstellen &rarr;</a>
+  <div class="header-actions">
+    <button type="button" id="fetch-now-btn" class="primary">Jetzt abrufen</button>
+    <a href="/report-review" class="nav-btn primary">Bericht erstellen &rarr;</a>
+    <button type="button" class="header-icon-btn" data-theme-toggle title="Hell/Dunkel">🌙</button>
+    <button type="button" class="header-icon-btn" data-open-settings title="Einstellungen">⚙️</button>
+  </div>
 </header>
 <main>
   <div class="panel">
@@ -75,7 +86,6 @@
       <input type="date" id="filter-from">
       <input type="date" id="filter-to">
       <button type="submit">Filtern</button>
-      <button type="button" id="fetch-now-btn" class="primary">Jetzt abrufen</button>
       <span class="session-count" id="session-count"></span>
     </form>
     <p class="muted" id="fetch-result"></p>
@@ -93,18 +103,12 @@
       <tbody id="sessions-body"></tbody>
     </table>
     <p class="empty-hint" id="empty-hint" hidden>
-      Noch keine Ladevorgänge. Quelle unter "Einstellungen" hinzufügen, dann hier "Jetzt abrufen".
+      Noch keine Ladevorgänge. Quelle unter "⚙️ Einstellungen" hinzufügen, dann "Jetzt abrufen".
     </p>
   </div>
 </main>
+{% include "_settings_modal.html" %}
 <script>
-async function api(url, opts) {
-  const resp = await fetch(url, opts);
-  const body = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(body.detail || resp.statusText);
-  return body;
-}
-
 function fmtDateTime(iso) {
   if (!iso) return '–';
   return new Date(iso).toLocaleString('de-DE');
@@ -127,13 +131,14 @@ function populateSelect(select, values, placeholder) {
   select.value = current;
 }
 
-let sources = [];
-let sourcesById = {};
+let pageSources = [];
 
-async function loadSourceFilter() {
-  const { sources: loaded } = await api('/api/sources');
-  sources = loaded;
-  sourcesById = Object.fromEntries(sources.map((s) => [s.id, s]));
+// Called by _settings_modal.html's loadSources() whenever sources are
+// added/removed/fetched via the Einstellungen modal, so this page's own
+// filter dropdown and "Jetzt abrufen" button stay in sync without a
+// full reload.
+function onSourcesChanged(sources) {
+  pageSources = sources;
   const select = document.getElementById('filter-source');
   const current = select.value;
   select.innerHTML = '<option value="">Alle Quellen</option>';
@@ -181,7 +186,7 @@ async function loadSessions() {
 
   for (const s of rows) {
     const tr = document.createElement('tr');
-    const sourceName = sourcesById[s.source_id]?.name || `#${s.source_id}`;
+    const sourceName = pageSources.find((x) => x.id === s.source_id)?.name || `#${s.source_id}`;
     const priceLabel = s.price_provider || 'kein Preis hinterlegt';
     const flagged = s.cost_delta_flagged;
     tr.innerHTML = `
@@ -210,9 +215,10 @@ document.getElementById('filter-form').addEventListener('submit', (ev) => {
 document.getElementById('fetch-now-btn').addEventListener('click', async () => {
   const btn = document.getElementById('fetch-now-btn');
   const resultEl = document.getElementById('fetch-result');
+  const { sources } = await api('/api/sources');
   const enabled = sources.filter((s) => s.enabled);
   if (enabled.length === 0) {
-    resultEl.textContent = 'Keine aktive Quelle -- unter "Einstellungen" hinzufügen.';
+    resultEl.textContent = 'Keine aktive Quelle -- unter "⚙️ Einstellungen" hinzufügen.';
     return;
   }
   btn.disabled = true;
@@ -229,15 +235,16 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
   }
   resultEl.textContent = failed === 0
     ? `${ok} Quelle(n) erfolgreich abgerufen.`
-    : `${ok} Quelle(n) erfolgreich, ${failed} fehlgeschlagen -- Details unter "Einstellungen".`;
+    : `${ok} Quelle(n) erfolgreich, ${failed} fehlgeschlagen -- Details unter "⚙️ Einstellungen".`;
   btn.disabled = false;
-  await loadSourceFilter();
+  onSourcesChanged(sources);
   await loadVehicleAndChargepointFilters();
   await loadSessions();
 });
 
 (async function init() {
-  await loadSourceFilter();
+  const { sources } = await api('/api/sources');
+  onSourcesChanged(sources);
   await loadVehicleAndChargepointFilters();
   await loadSessions();
 })();

@@ -50,3 +50,13 @@ def test_validate_show_signature_line_non_bool_raises():
 def test_validate_multiple_fields_at_once():
     patch = {"cost_basis": "openwb", "show_signature_line": True}
     assert validate(patch) == patch
+
+
+def test_validate_valid_orientation():
+    assert validate({"orientation": "portrait"}) == {"orientation": "portrait"}
+    assert validate({"orientation": "landscape"}) == {"orientation": "landscape"}
+
+
+def test_validate_unknown_orientation_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"orientation": "sideways"})

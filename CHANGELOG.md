@@ -7,6 +7,33 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Changed
+- Second real-usage feedback round (2026-09-04, same day, after reviewing
+  an actual generated PDF and dashboard screenshots):
+  - Einstellungen is now a `<dialog>` popup (new `app/templates/
+    _settings_modal.html`, a Jinja partial with no route of its own,
+    included by both `/` and `/report-review`) opened via a `⚙️` button in
+    the header, replacing the standalone `/settings` page from the first
+    feedback round -- matches this author's other projects' pattern.
+  - Added an explicit 🌙/☀️ theme toggle button, `localStorage`-persisted,
+    layered on top of the existing `prefers-color-scheme` default.
+  - "Jetzt abrufen" moved into the header on `/`, next to the theme/
+    settings buttons, so the page's own filter panel is just filters.
+  - Removed `/report-review`'s own PDF-column checklist -- Berichts-
+    Einstellungen is now the *only* place columns are chosen. The
+    duplication was the likely cause of an earlier "the report settings
+    aren't remembered" report: a per-request override there could easily
+    look like a forgotten setting.
+  - Settings panel order changed to Quellen, Preise, Verlauf abrufen (was
+    Quellen, Verlauf abrufen, Preise).
+  - New `orientation` setting (portrait/landscape, `report_settings.py`,
+    additive `report_settings.orientation` column) -- resolves the
+    portrait-vs-landscape back-and-forth from the first feedback round
+    with an actual choice instead of a hardcoded default.
+  - Fixed a real bug: the source/price "+"-toggled add-forms never
+    actually stayed hidden, because `.inline { display: flex }` (a class
+    on those forms) beat the browser's own `[hidden]` rule on CSS
+    specificity. Fixed with an explicit `[hidden] { display: none
+    !important; }` rule.
 - First real-usage feedback round (2026-09-04, after testing against a
   real openWB and a real Proxmox deployment):
   - Removed "Dienstwagenabrechnung" everywhere (code, docs, the PDF

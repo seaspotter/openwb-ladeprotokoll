@@ -116,13 +116,13 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/scheduler.py` | Daily background fetch (all enabled sources, current month), started as an `asyncio` task in `main.py`'s lifespan |
 | `app/price_entries.py` | Pure: price-entry match/precedence + corrected-cost math |
 | `app/report_build.py` | Pure: sessions + columns + cost_basis + price decisions -> formatted rows/totals for the template |
-| `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, signature line) — pure `validate()` + DB get/update |
+| `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, orientation, signature line) — pure `validate()` + DB get/update |
 | `app/pdf_render.py` | Jinja2 (`templates/report_pdf.html`) + WeasyPrint, HTML preview or PDF bytes from the same template |
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
 | `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" |
-| `app/templates/settings.html` | Source CRUD, price entry CRUD, backfill control, Berichts-Einstellungen, at `/settings` |
-| `app/templates/report_review.html` | Session/column/price-override selection UI, at `/report-review` |
+| `app/templates/_settings_modal.html` | Jinja partial (no route): source/price CRUD, backfill, Berichts-Einstellungen, in a `<dialog>` popup |
+| `app/templates/report_review.html` | Session/price-override selection UI, at `/report-review` |
 | `app/templates/report_pdf.html` | The actual report layout — rendered as both the HTML preview and the PDF |
 
 ## Data-format notes
@@ -175,3 +175,12 @@ value ever turns up, check it against `parse_record`'s
   cleanly together — see Python's own `decimal` docs). `web.py`'s
   `_to_float` helper converts DB rows before they reach those modules —
   follow that pattern for any new caller.
+- A plain `[hidden]` attribute loses to *any* CSS rule that sets `display`
+  with equal-or-higher specificity — a class like `.inline { display:
+  flex }` on the same element beats the browser's own `[hidden]` rule in
+  its UA stylesheet, so the element stays visible regardless of the
+  attribute. Shipped once (the add-source/add-price forms in
+  `_settings_modal.html` stayed open even before their "+" button was
+  clicked). Fix: an explicit `[hidden] { display: none !important; }`
+  rule, present in that partial's own `<style>` block — keep it there if
+  you touch that CSS.

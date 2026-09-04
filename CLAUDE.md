@@ -102,21 +102,27 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   first, latest at the bottom — a printed ledger reads that way) regardless
   of what order sessions arrive in. Unit tested.
 - `app/report_settings.py` — thin: a single-row `report_settings` table
-  (id=1, `CHECK`-enforced) holding `default_columns` (pre-checked in the
-  review UI), `cost_basis`, and `show_signature_line` — edited from
+  (id=1, `CHECK`-enforced) holding `default_columns` (the *only* column
+  selection — see `_settings_modal.html`), `cost_basis`, `orientation`
+  ("portrait"/"landscape"), and `show_signature_line` — edited from
   Einstellungen's "Berichts-Einstellungen" panel via `GET/PUT
-  /api/report-settings`. `validate()` is pure and unit tested; `get_settings`/
-  `update_settings` do the DB round trip (upsert-on-first-read, so there's
-  no separate seeding step).
+  /api/report-settings`. `validate()` is pure and unit tested;
+  `get_settings`/`update_settings` do the DB round trip (upsert-on-first-
+  read, so there's no separate seeding step) — verified with an
+  integration test that a setting written via `PUT` survives a completely
+  fresh `GET` (simulating a page reload), since a user once reported
+  settings "not remembered" (root cause was the now-removed duplicate
+  column picker on `report_review.html`, not this module).
 - `app/pdf_render.py` — Jinja2 (`templates/report_pdf.html`) + WeasyPrint.
   One template renders both the HTML preview and the actual PDF — `@page`
   rules WeasyPrint honors are simply ignored by a browser. The page is
-  **portrait** by default (user preference) — with the cost column
-  collapsed to one and a lean default column set (`report_settings.py`)
-  this fits, but selecting most/all 13 columns at once can still overflow
-  portrait's ~17cm printable width the same way it did before landscape
-  was tried and reverted; no orientation setting exists, don't silently
-  reintroduce landscape as the default if this resurfaces. The footer
+  **portrait** by default, but `orientation` is now a real setting
+  (`report_settings.py`, `ReportMeta.orientation`, `@page { size: A4{{ "
+  landscape" if ... }}; }`) — portrait fits a lean column selection
+  comfortably, landscape is there for whenever more columns are selected
+  than portrait's ~17cm printable width can hold; this went back and
+  forth (landscape -> portrait -> configurable) based on real feedback
+  from real reports, don't collapse it back to a hardcoded default. The footer
   (disclaimer + optional signature line, `ReportMeta.show_signature_line`)
   has `page-break-inside: avoid` — without it, WeasyPrint can push just the
   signature line onto its own near-blank trailing page. The document
@@ -149,43 +155,63 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
   chargepoint are `<select>`s populated from the currently-loaded sessions,
-  not free text, so filters can't typo their way to zero results; no
-  selection/columns — that's `report_review.html`'s job) plus a "Jetzt
-  abrufen" button that fetches every enabled source's current month.
-  Sources and price entries are deliberately **not** managed here — see
-  `settings.html` — so this page stays focused on "what got fetched", not
-  configuration (a user-feedback-driven split, see [[feedback-ui-separation]]
-  in project memory — apply the same split to any new page).
-- `app/templates/settings.html` — source CRUD (add-form behind a "+" icon
-  next to "Quellen", not always visible), price entry CRUD (same "+"
-  pattern; includes a free-text `notes` field, shown in the table, since an
-  unlabeled provider+date-range row is meaningless months later), the
-  backfill control (`POST /api/sources/{id}/backfill`, `from_month`/
-  `to_month` as "YYYYMM" — the UI's `<input type="month">` gives
-  "YYYY-MM" and just strips the dash) for pulling in months older than
-  the current one, and "Berichts-Einstellungen" (`GET/PUT
-  /api/report-settings`) for the report-wide `default_columns`/
-  `cost_basis`/`show_signature_line` settings `report_settings.py` owns.
-- `app/templates/report_review.html` — session/column/price-override
-  selection UI (`/report-review`): filters (source/vehicle/chargepoint/
-  date, same dropdown-not-free-text pattern as `index.html`) load sessions
-  via `/api/sessions`; the PDF-column checklist starts pre-checked from
-  `GET /api/report-columns`'s `default_columns` (the Berichts-Einstellungen
-  value), not "all columns"; recomputes totals client-side as the
-  selection changes (mirroring `report_build.py`'s summing logic in JS,
-  since this is just an interactive preview — the server-side build via
+  not free text, so filters can't typo their way to zero results) plus a
+  "Jetzt abrufen" button (header, next to the settings/theme icons — not
+  buried in the filter form) that fetches every enabled source's current
+  month. Sources and price entries are deliberately **not** managed here
+  — see `_settings_modal.html` — so this page stays focused on "what got
+  fetched", not configuration (a user-feedback-driven split — apply the
+  same split to any new page).
+- `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
+  **not** a route — there is no `/settings` page; an earlier version had
+  one, replaced after explicit user feedback to match a gear-icon-opens-
+  a-popup pattern from this author's other projects), included by both
+  `index.html` and `report_review.html` right before each page's own
+  `<script>` (load-order matters: the partial's `<script>` defines the
+  shared `api()` helper and `loadSources()`/`loadPrices()`/
+  `loadReportSettings()` that the host page's own script calls, so it must
+  come first in document order). Opened via a `⚙️` button
+  (`[data-open-settings]`) in each page's header; a `🌙`/`☀️` button
+  (`[data-theme-toggle]`) next to it is an explicit light/dark override on
+  top of the CSS `prefers-color-scheme` default, persisted in
+  `localStorage` (each page also has a tiny inline script at the top of
+  `<body>` that applies a stored theme before first paint, to avoid a
+  flash). Panel order is Quellen, Preise, Verlauf abrufen, Berichts-
+  Einstellungen (this exact order was requested explicitly — don't
+  reorder without reason). Source/price entry add-forms are collapsed
+  behind a "+" icon button per panel, toggled via `el.hidden = !el.hidden`
+  — **the modal's own `<style>` includes `[hidden] { display: none
+  !important; }`**, needed because `.inline { display: flex }` (the
+  add-forms carry that class) otherwise wins the specificity fight against
+  the browser's default `[hidden]` rule and the form stays visible
+  regardless of the `hidden` attribute; this was a real shipped bug,
+  caught from a screenshot showing the form always open. Price entries
+  have a `notes` field here (form + table column) — an unlabeled
+  provider+date-range row is meaningless months later. "Berichts-
+  Einstellungen" (`GET/PUT /api/report-settings`) is the **only** place
+  PDF columns are chosen — `report_review.html` used to have its own
+  second column checklist too, which was confusing (two places to set
+  the same thing) and is gone; see `report_settings.py`.
+- `app/templates/report_review.html` — session/price-override selection UI
+  (`/report-review`): filters (source/vehicle/chargepoint/date, same
+  dropdown-not-free-text pattern as `index.html`) load sessions via
+  `/api/sessions`; recomputes totals client-side as the selection changes
+  (mirroring `report_build.py`'s summing logic in JS, since this is just
+  an interactive preview — the server-side build via
   `/api/reports/preview`/`/api/reports` is the actual source of truth for
-  what a generated report contains), and lists/links previously generated
-  reports. Keep new UI copy in German too.
+  what a generated report contains); lists/links previously generated
+  reports. Sends no `columns` in its request bodies at all (see
+  `_settings_modal.html` above for why) — `web.py` falls back to
+  `report_settings`'s `default_columns` whenever `columns` is omitted.
+  Keep new UI copy in German too.
 
-All three page templates share a `a.nav-btn` header-button style (not bare
-text links) for navigation, positioned consistently: a secondary "back"
-link on the left (`← Übersicht` / nothing on `index.html`, which has no
-"back") and the primary forward action on the right, `.primary` (accent
-color) only for the one actual next-step action on that page (`Bericht
-erstellen` from `index.html`/`settings.html`; `report_review.html`'s own
-"Bericht erzeugen" button is the primary action there instead, so its
-header's `Einstellungen` link stays plain).
+Header navigation is consistent across pages: a secondary "back" link on
+the left where relevant (`← Übersicht`; `index.html` has none, it *is*
+"back"), the `⚙️`/theme icon pair on the right, and (`index.html` only)
+"Jetzt abrufen" plus the one primary (`.primary`, accent-colored)
+next-step action for that page — `Bericht erstellen →` from `index.html`;
+`report_review.html`'s own in-page "Bericht erzeugen" button is the
+primary action there instead.
 - An MCP endpoint — deliberately deferred past v1, see `ROADMAP.md`.
 
 Storage is Postgres only. Reports, once generated, are immutable — the

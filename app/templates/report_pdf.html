@@ -5,15 +5,11 @@
 <title>{{ meta.title }}</title>
 <style>
   @page {
-    /* Portrait by default (per user preference). With the cost column
-       collapsed to a single "Kosten" (see report_build.py) and a lean
-       default column selection (see report_settings.py), this fits
-       comfortably -- but selecting most/all columns at once can still
-       overflow portrait's ~17cm printable width, same as it did with 14
-       columns before. No orientation setting exists yet; if that turns
-       out to matter, revisit rather than silently reintroducing
-       landscape as the default. */
-    size: A4;
+    /* Orientation is a user setting now (Einstellungen -> Berichts-
+       Einstellungen, report_settings.py) -- portrait fits a lean column
+       selection comfortably, landscape is there for whenever more columns
+       are selected than portrait's ~17cm printable width can hold. */
+    size: A4{{ " landscape" if meta.orientation == "landscape" else "" }};
     margin: 1.8cm 1.5cm 2cm 1.5cm;
     @bottom-center {
       content: "Seite " counter(page) " von " counter(pages);

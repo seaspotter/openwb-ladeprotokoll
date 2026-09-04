@@ -28,6 +28,7 @@
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .brand-mark { font-weight: 700; color: #16a34a; }
   .nav-spacer { margin-left: auto; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
   a.nav-btn {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 10px; font-size: 13px; text-decoration: none;
@@ -52,8 +53,6 @@
   button:disabled { opacity: 0.5; cursor: default; }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .muted { color: var(--muted); font-size: 12px; }
-  .columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; }
-  label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
   .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .totals-grid .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
   .totals-grid .stat .label { font-size: 11px; color: var(--muted); }
@@ -63,11 +62,20 @@
 </style>
 </head>
 <body>
+<script>
+try {
+  const stored = localStorage.getItem('theme');
+  if (stored) document.documentElement.dataset.theme = stored;
+} catch (e) {}
+</script>
 <header>
   <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
   <a href="/" class="nav-btn">&larr; Übersicht</a>
   <span class="nav-spacer"></span>
-  <a href="/settings" class="nav-btn">Einstellungen</a>
+  <div class="header-actions">
+    <button type="button" class="header-icon-btn" data-theme-toggle title="Hell/Dunkel">🌙</button>
+    <button type="button" class="header-icon-btn" data-open-settings title="Einstellungen">⚙️</button>
+  </div>
 </header>
 <main>
   <div class="panel">
@@ -84,12 +92,10 @@
   </div>
 
   <div class="panel">
-    <h2>PDF-Spalten</h2>
-    <div class="columns-grid" id="columns-grid"></div>
-  </div>
-
-  <div class="panel">
     <h2>Ladevorgänge</h2>
+    <p class="muted" style="margin-top: -6px;">
+      Welche Spalten im PDF erscheinen, wird unter "⚙️ Einstellungen" → Berichts-Einstellungen festgelegt.
+    </p>
     <table id="sessions-table">
       <thead>
         <tr>
@@ -130,17 +136,8 @@
     </table>
   </div>
 </main>
+{% include "_settings_modal.html" %}
 <script>
-async function api(url, opts) {
-  const resp = await fetch(url, opts);
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}));
-    throw new Error(body.detail || resp.statusText);
-  }
-  const contentType = resp.headers.get('content-type') || '';
-  return contentType.includes('application/json') ? resp.json() : resp.text();
-}
-
 function fmtNum(value, decimals, suffix) {
   if (value === null || value === undefined) return '–';
   return value.toFixed(decimals).replace('.', ',') + (suffix || '');
@@ -155,9 +152,8 @@ function fmtDuration(seconds) {
 
 let sessions = [];
 let selection = {}; // id -> { checked: bool, override: 'auto' | 'openwb' | priceEntryId(string) }
-let priceEntries = [];
-let priceEntriesById = {};
-let selectedColumns = new Set();
+let reviewPriceEntries = [];
+let reviewPriceEntriesById = {};
 
 async function loadSourceFilter() {
   const { sources } = await api('/api/sources');
@@ -168,26 +164,6 @@ async function loadSourceFilter() {
     opt.textContent = s.name;
     select.appendChild(opt);
   }
-}
-
-async function loadColumns() {
-  const { columns, default_columns } = await api('/api/report-columns');
-  const grid = document.getElementById('columns-grid');
-  grid.innerHTML = '';
-  for (const c of columns) {
-    const checked = default_columns.includes(c.key);
-    if (checked) selectedColumns.add(c.key);
-    const label = document.createElement('label');
-    label.className = 'check';
-    label.innerHTML = `<input type="checkbox" data-column="${c.key}" ${checked ? 'checked' : ''}> ${c.label}`;
-    grid.appendChild(label);
-  }
-  grid.addEventListener('change', (ev) => {
-    const cb = ev.target;
-    if (!cb.dataset.column) return;
-    if (cb.checked) selectedColumns.add(cb.dataset.column);
-    else selectedColumns.delete(cb.dataset.column);
-  });
 }
 
 function populateSelect(select, values, placeholder) {
@@ -213,16 +189,16 @@ async function loadVehicleAndChargepointFilters() {
   populateSelect(document.getElementById('filter-chargepoint'), chargepoints, 'Alle Ladepunkte');
 }
 
-async function loadPriceEntries() {
+async function loadReviewPriceEntries() {
   const { prices } = await api('/api/prices');
-  priceEntries = prices;
-  priceEntriesById = Object.fromEntries(prices.map((p) => [String(p.id), p]));
+  reviewPriceEntries = prices;
+  reviewPriceEntriesById = Object.fromEntries(prices.map((p) => [String(p.id), p]));
 }
 
 function costUsedFor(s, overrideVal) {
   if (overrideVal === 'openwb') return s.cost_openwb;
   if (overrideVal && overrideVal !== 'auto') {
-    const entry = priceEntriesById[overrideVal];
+    const entry = reviewPriceEntriesById[overrideVal];
     if (entry && s.energy_kwh != null) return s.energy_kwh * entry.price_per_kwh;
     return s.cost_openwb;
   }
@@ -233,7 +209,7 @@ function overrideOptionsHtml(s, current) {
   const autoLabel = s.price_provider ? `Automatisch (${s.price_provider})` : 'Automatisch (kein Preis)';
   let html = `<option value="auto" ${current === 'auto' ? 'selected' : ''}>${autoLabel}</option>`;
   html += `<option value="openwb" ${current === 'openwb' ? 'selected' : ''}>openWB-Wert verwenden</option>`;
-  for (const p of priceEntries) {
+  for (const p of reviewPriceEntries) {
     const sel = current === String(p.id) ? 'selected' : '';
     html += `<option value="${p.id}" ${sel}>${p.provider} (${p.price_per_kwh.toFixed(4)} €/kWh)</option>`;
   }
@@ -339,11 +315,10 @@ function currentSelectionPayload() {
       price_overrides[s.id] = sel.override === 'openwb' ? 'openwb' : parseInt(sel.override, 10);
     }
   }
-  return {
-    session_ids,
-    columns: Array.from(selectedColumns),
-    price_overrides,
-  };
+  // No `columns` here: which PDF columns appear is decided solely by
+  // Berichts-Einstellungen (Einstellungen modal) -- omitting it makes the
+  // backend fall back to that saved default, see web.py.
+  return { session_ids, price_overrides };
 }
 
 document.getElementById('filter-source').addEventListener('change', () => {
@@ -422,7 +397,7 @@ document.getElementById('reports-body').addEventListener('click', async (ev) => 
 });
 
 (async function init() {
-  await Promise.all([loadSourceFilter(), loadColumns(), loadPriceEntries()]);
+  await Promise.all([loadSourceFilter(), loadReviewPriceEntries()]);
   await loadVehicleAndChargepointFilters();
   await loadSessions();
   await loadReports();

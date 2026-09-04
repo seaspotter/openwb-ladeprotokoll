@@ -79,11 +79,6 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
-    return templates.TemplateResponse("settings.html", {"request": request})
-
-
 @router.get("/report-review", response_class=HTMLResponse)
 async def report_review(request: Request):
     return templates.TemplateResponse("report_review.html", {"request": request})
@@ -441,7 +436,7 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 
 
 async def _report_meta(
-    pool, report_id: str, title: str, generated_at: datetime, rows, show_signature_line: bool
+    pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
@@ -455,7 +450,8 @@ async def _report_meta(
         period_to=max(begins).strftime("%d.%m.%Y") if begins else None,
         source_names=sorted(source_names),
         vehicle_names=sorted({r["vehicle_name"] for r in rows if r["vehicle_name"]}),
-        show_signature_line=show_signature_line,
+        show_signature_line=settings["show_signature_line"],
+        orientation=settings["orientation"],
     )
 
 
@@ -497,9 +493,7 @@ async def api_report_preview(body: ReportBuildIn):
         )
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    meta = await _report_meta(
-        pool, "Vorschau", "Vorschau", datetime.now(), rows, settings["show_signature_line"]
-    )
+    meta = await _report_meta(pool, "Vorschau", "Vorschau", datetime.now(), rows, settings)
     return render_html(data, meta)
 
 
@@ -534,8 +528,7 @@ async def api_create_report(body: ReportGenerateIn):
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), body.title, report_row["created_at"], rows,
-                settings["show_signature_line"],
+                pool, str(report_id), body.title, report_row["created_at"], rows, settings
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(

@@ -36,6 +36,7 @@ class ReportMeta:
     source_names: list[str]
     vehicle_names: list[str]
     show_signature_line: bool = False
+    orientation: str = "portrait"
 
 
 def render_html(data: ReportData, meta: ReportMeta) -> str:

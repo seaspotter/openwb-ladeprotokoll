@@ -3,6 +3,19 @@
 Kurze Referenz für die Weboberfläche. Für Installation/Konfiguration siehe
 [DEPLOYMENT.md](DEPLOYMENT.md), für die Architektur [CLAUDE.md](CLAUDE.md).
 
+## Kopfzeile
+
+Auf jeder Seite rechts oben:
+
+- **Jetzt abrufen** *(nur auf der Übersicht)* — ruft den aktuellen Monat
+  aller aktiven Quellen ab und lädt die Tabelle danach neu. Für einzelne
+  Quellen oder ältere Monate siehe Einstellungen → Verlauf abrufen.
+- **🌙/☀️** — wechselt zwischen hellem und dunklem Design; die Wahl wird
+  im Browser gemerkt (pro Browser, nicht serverseitig) und gilt für alle
+  drei Seiten.
+- **⚙️ Einstellungen** — öffnet die Einstellungen als Dialogfenster über
+  der aktuellen Seite (kein Seitenwechsel nötig).
+
 ## Übersicht (Startseite)
 
 Zeigt alle bereits abgerufenen Ladevorgänge, mit Filter nach Quelle,
@@ -11,20 +24,17 @@ Fahrzeug, Ladepunkt und Zeitraum. Fahrzeug und Ladepunkt sind Auswahllisten
 die gewählte Quelle) statt Freitextfeldern — falsche Schreibweisen liefern
 so keine leeren Ergebnisse.
 
-- **Jetzt abrufen** — ruft den aktuellen Monat aller aktiven Quellen ab
-  und lädt die Tabelle danach neu. Für einzelne Quellen oder ältere Monate
-  siehe "Einstellungen" → Verlauf abrufen.
-- Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
-  Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
-  Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
-  ab, sind beide Spalten rot hervorgehoben.
+Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
+Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
+Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
+ab, sind beide Spalten rot hervorgehoben.
 
 Diese Ansicht ist rein zur Übersicht — die Auswahl für einen Bericht
 passiert unter "Bericht erstellen".
 
-## Einstellungen
+## Einstellungen (⚙️)
 
-Erreichbar über "Einstellungen" in der Kopfzeile.
+Ein Dialogfenster mit vier Bereichen, in dieser Reihenfolge:
 
 ### Quellen
 
@@ -42,19 +52,11 @@ werden soll.
 - **Löschen** — entfernt die Quelle dauerhaft, inklusive aller bereits
   gespeicherten Ladevorgänge dieser Quelle.
 
-Zusätzlich zu "Jetzt abrufen" läuft im Hintergrund ein automatischer
-Abruf: einmal beim Start der Anwendung und danach alle 24 Stunden werden
-alle aktiven Quellen für den aktuellen Monat neu abgefragt — ohne, dass
-dafür etwas eingestellt werden muss.
-
-### Verlauf abrufen
-
-Sowohl der automatische Abruf als auch "Jetzt abrufen" erfassen immer nur
-den **aktuellen** Monat. Um ältere, bereits vergangene Monate
-nachzuholen (z. B. beim erstmaligen Einrichten einer Quelle): Quelle,
-Start- und Endmonat wählen und "Abrufen". Das kann je nach Zeitraum einen
-Moment dauern; die Anzahl der verarbeiteten Ladevorgänge wird danach
-angezeigt.
+Zusätzlich zu "Jetzt abrufen" läuft im Hintergrund bereits automatisch ein
+täglicher Abruf — einmal beim Start der Anwendung und danach alle 24
+Stunden werden alle aktiven Quellen für den aktuellen Monat neu
+abgefragt, ohne dass dafür etwas eingestellt werden muss (ein Hinweis
+dazu steht auch direkt im Quellen-Bereich).
 
 ### Preise
 
@@ -76,20 +78,34 @@ Kostenberechnung überprüft und ggf. korrigiert wird.
   PDF-Berichte sind davon nicht betroffen, da sie den zum Zeitpunkt der
   Erzeugung verwendeten Preis eingefroren mitspeichern.
 
+### Verlauf abrufen
+
+Sowohl der automatische Abruf als auch "Jetzt abrufen" erfassen immer nur
+den **aktuellen** Monat. Um ältere, bereits vergangene Monate
+nachzuholen (z. B. beim erstmaligen Einrichten einer Quelle): Quelle,
+Start- und Endmonat wählen und "Abrufen". Das kann je nach Zeitraum einen
+Moment dauern; die Anzahl der verarbeiteten Ladevorgänge wird danach
+angezeigt.
+
 ### Berichts-Einstellungen
 
 Gilt für alle künftig erzeugten Berichte (bereits erzeugte PDFs bleiben
-unverändert):
+unverändert). Dies ist die **einzige** Stelle, an der die PDF-Spalten
+gewählt werden — in "Bericht erstellen" selbst gibt es keine separate
+Auswahl mehr:
 
-- **PDF-Spalten (Vorauswahl)** — welche Spalten in "Bericht erstellen"
-  standardmäßig angehakt sind. Dort lässt sich das für einen einzelnen
-  Bericht weiterhin ändern.
+- **PDF-Spalten** — welche Spalten im PDF erscheinen.
 - **Kosten-Spalte zeigt** — ob das PDF pro Ladevorgang und in der Summe
   openWBs eigenen Wert oder den korrigierten (mit automatischem Fallback
   auf openWB, wenn kein Preis passt) zeigt. Es gibt nur eine "Kosten"-
   Spalte im PDF, keine zwei nebeneinander.
+- **Ausrichtung** — Hochkant (Standard) oder Querformat. Bei vielen
+  ausgewählten Spalten passt Hochkant u. U. nicht mehr sauber auf eine
+  Seite — dann Querformat wählen.
 - **Unterschriftzeile im PDF** — ob am Ende des Dokuments eine Zeile für
   Unterschrift/Datum steht. Standardmäßig aus.
+
+Nicht vergessen: nach Änderungen unten **Speichern** klicken.
 
 ## Bericht erstellen
 
@@ -98,20 +114,20 @@ unverändert):
 1. **Filter** — optional nach Quelle, Fahrzeug, Ladepunkt und Zeitraum
    eingrenzen, dann "Laden". Alle gefundenen Ladevorgänge sind zunächst
    ausgewählt (Häkchen), einzelne lassen sich abwählen.
-2. **PDF-Spalten** — welche der Ladeprotokoll-Spalten im PDF erscheinen
-   sollen; die Vorauswahl kommt aus den Berichts-Einstellungen und lässt
-   sich hier für diesen einen Bericht ändern.
-3. **Ladevorgänge-Tabelle** — pro Zeile steht der automatisch ermittelte
+2. **Ladevorgänge-Tabelle** — pro Zeile steht der automatisch ermittelte
    Preis ("Automatisch (Anbieter)" oder "Automatisch (kein Preis)"); über
    das Dropdown lässt sich das für diesen einen Ladevorgang übersteuern:
    ein bestimmter Preis-Eintrag, oder "openWB-Wert verwenden" (keine
    Korrektur für diese Zeile). Die "Kosten (verwendet)"-Spalte und die
    Summe darunter aktualisieren sich sofort.
-4. **Vorschau** — zeigt das Dokument in der Seite, ohne etwas zu
+3. **Vorschau** — zeigt das Dokument in der Seite, ohne etwas zu
    speichern; beliebig oft wiederholbar.
-5. **Bericht erzeugen** — Titel eingeben (z. B. "August 2026") und
+4. **Bericht erzeugen** — Titel eingeben (z. B. "August 2026") und
    erzeugen. Das PDF steht danach über den angezeigten Link sowie in
    "Bisherige Berichte" zur Verfügung.
+
+Welche Spalten im PDF erscheinen, wird ausschließlich unter Einstellungen
+→ Berichts-Einstellungen festgelegt (siehe oben).
 
 Im PDF selbst stehen die Ladevorgänge chronologisch aufsteigend
 (ältester zuerst, neuester unten), unabhängig von der Reihenfolge in der
@@ -122,7 +138,7 @@ Ein erzeugter Bericht ist unveränderlich: eine erneute Erzeugung legt
 immer einen neuen, eigenständigen Bericht an — die zum jeweiligen
 Zeitpunkt verwendeten Ladevorgangs- und Preisdaten sind darin eingefroren
 und bleiben auch dann unverändert, wenn die zugrunde liegenden Daten
-später bearbeitet oder erneut abgerufen werden.
+oder die Berichts-Einstellungen später geändert werden.
 
 ## Self-Update
 
