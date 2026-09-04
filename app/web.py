@@ -333,6 +333,7 @@ async def _query_sessions(
              if k != "raw_json"}
         energy_kwh = float(r["energy_kwh"]) if r["energy_kwh"] is not None else None
         cost_openwb = float(r["cost_openwb"]) if r["cost_openwb"] is not None else None
+        grid_pct = _to_float(r["power_source_grid_pct"])
         decision = match_and_decide(
             entries,
             source_id=r["source_id"],
@@ -340,6 +341,7 @@ async def _query_sessions(
             session_date=r["time_begin"].date(),
             energy_kwh=energy_kwh,
             cost_openwb=cost_openwb,
+            grid_pct=grid_pct,
         )
         # asyncpg returns NUMERIC as Decimal -- these fields go out as
         # plain JSON numbers over HTTP either way, but statistics.py's
@@ -358,6 +360,10 @@ async def _query_sessions(
         d["price_provider"] = decision.price_entry["provider"] if decision.price_entry else None
         d["cost_corrected"] = decision.cost_corrected
         d["cost_used"] = decision.cost_used
+        # Informational only -- shown as its own column on index.html's
+        # read-only overview, nothing else consumes it (not report
+        # generation, not filtering/export -- see price_entries.py).
+        d["cost_used_grid_only"] = decision.cost_used_grid_only
         d["cost_delta"] = decision.delta
         d["cost_delta_flagged"] = decision.delta_flagged
         sessions.append(d)

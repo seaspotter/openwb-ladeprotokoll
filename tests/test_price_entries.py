@@ -161,3 +161,34 @@ def test_match_and_decide_end_to_end():
     assert decision.price_entry == entry
     assert decision.cost_corrected == 3.5
     assert decision.cost_used == 3.5
+
+
+def test_decide_price_grid_only_prices_only_the_grid_share():
+    entry = _entry(1, price_per_kwh=0.30)
+    decision = decide_price(energy_kwh=10.0, cost_openwb=1.0, price_entry=entry, grid_pct=40.0)
+    # 10 kWh total, 40% grid -> 4 kWh grid-priced at 0.30 = 1.20
+    assert decision.cost_corrected_grid_only == pytest.approx(1.20)
+    # total-energy figures are unaffected by grid_pct
+    assert decision.cost_corrected == pytest.approx(3.0)
+
+
+def test_decide_price_grid_only_missing_pct_assumes_100_percent_grid():
+    entry = _entry(1, price_per_kwh=0.30)
+    decision = decide_price(energy_kwh=10.0, cost_openwb=1.0, price_entry=entry, grid_pct=None)
+    assert decision.cost_corrected_grid_only == pytest.approx(3.0)
+    assert decision.cost_corrected_grid_only == decision.cost_corrected
+
+
+def test_decide_price_grid_only_no_entry_falls_back_to_openwb():
+    decision = decide_price(energy_kwh=10.0, cost_openwb=4.5, price_entry=None, grid_pct=40.0)
+    assert decision.cost_corrected_grid_only is None
+    assert decision.cost_used_grid_only == 4.5
+
+
+def test_match_and_decide_passes_grid_pct_through():
+    entry = _entry(1, source_id=1, vehicle_name="VW ID3", price_per_kwh=0.30)
+    decision = match_and_decide(
+        [entry], source_id=1, vehicle_name="VW ID3", session_date=date(2026, 8, 2),
+        energy_kwh=10.0, cost_openwb=1.0, grid_pct=50.0,
+    )
+    assert decision.cost_corrected_grid_only == pytest.approx(1.5)
