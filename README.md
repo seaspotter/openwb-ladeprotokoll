@@ -92,9 +92,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open http://localhost:8080, add a source with your openWB's address, and
-click "Jetzt abrufen" to pull in its current month's charge log. Then
-"Bericht erstellen" to review the fetched sessions and generate a PDF.
+Open http://localhost:8080, go to "Einstellungen" and add a source with
+your openWB's address. Back on the overview, click "Jetzt abrufen" to
+pull in its current month's charge log (need older months too? use
+"Verlauf abrufen" in Einstellungen). Then "Bericht erstellen" to review
+the fetched sessions and generate a PDF.
 
 ## Docs
 

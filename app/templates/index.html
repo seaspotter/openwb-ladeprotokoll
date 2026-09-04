@@ -24,84 +24,71 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   .brand-mark { font-weight: 700; color: #16a34a; }
-  header a { color: var(--muted); text-decoration: none; font-size: 13px; margin-left: auto; }
+  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
   header a:hover { color: var(--accent); }
-  main { padding: 16px 20px; max-width: 960px; margin: 0 auto; }
+  header .spacer { margin-left: auto; }
+  main { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
   .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 500; }
-  .status-ok { color: var(--ok); }
-  .status-error { color: var(--error); }
+  td.numeric, th.numeric { text-align: right; }
+  .flagged { color: var(--error); font-weight: 600; }
   form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  input[type=text], input[type=number], input[type=date], select {
+  input[type=text], input[type=date], select {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 8px; font-size: 13px;
   }
-  input[type=text] { min-width: 180px; }
-  input[type=number] { width: 100px; }
-  .price-flag { color: var(--error); font-weight: 600; }
+  input[type=text] { min-width: 160px; }
   button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   button:hover { border-color: var(--accent); }
-  button.danger:hover { border-color: var(--error); color: var(--error); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .muted { color: var(--muted); font-size: 12px; }
+  .session-count { font-size: 12px; color: var(--muted); margin-left: 8px; }
+  .empty-hint { padding: 24px; text-align: center; color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
   <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  <a href="/settings">Einstellungen</a>
+  <span class="spacer"></span>
   <a href="/report-review">Bericht erstellen &rarr;</a>
 </header>
 <main>
   <div class="panel">
-    <h2>Quellen</h2>
-    <table id="sources-table">
-      <thead>
-        <tr><th>Name</th><th>Adresse</th><th>Aktiv</th><th>Letzter Abruf</th><th>Status</th><th></th></tr>
-      </thead>
-      <tbody id="sources-body"></tbody>
-    </table>
-  </div>
-
-  <div class="panel">
-    <h2>Quelle hinzufügen</h2>
-    <form class="inline" id="add-source-form">
-      <input type="text" id="new-name" placeholder="Name (z.B. Zuhause)" required>
-      <input type="text" id="new-base-url" placeholder="IP-Adresse oder URL" required>
-      <button type="submit">Hinzufügen</button>
+    <h2>Ladevorgänge</h2>
+    <form class="inline" id="filter-form">
+      <select id="filter-source"><option value="">Alle Quellen</option></select>
+      <input type="text" id="filter-vehicle" placeholder="Fahrzeug (leer = alle)">
+      <input type="date" id="filter-from">
+      <input type="date" id="filter-to">
+      <button type="submit">Filtern</button>
+      <button type="button" id="fetch-now-btn" class="primary">Jetzt abrufen</button>
+      <span class="session-count" id="session-count"></span>
     </form>
-    <p class="muted" id="add-source-error"></p>
+    <p class="muted" id="fetch-result"></p>
   </div>
 
   <div class="panel">
-    <h2>Preise</h2>
-    <table id="prices-table">
+    <table id="sessions-table">
       <thead>
         <tr>
-          <th>Anbieter</th><th>Preis/kWh</th><th>Quelle</th><th>Fahrzeug</th>
-          <th>Gültig ab</th><th>Gültig bis</th><th></th>
+          <th>Beginn</th><th>Quelle</th><th>Fahrzeug</th><th>Ladepunkt</th>
+          <th class="numeric">Energie</th><th class="numeric">Kosten (openWB)</th>
+          <th>Preis</th><th class="numeric">Kosten (verwendet)</th>
         </tr>
       </thead>
-      <tbody id="prices-body"></tbody>
+      <tbody id="sessions-body"></tbody>
     </table>
-  </div>
-
-  <div class="panel">
-    <h2>Preis hinzufügen</h2>
-    <form class="inline" id="add-price-form">
-      <input type="text" id="new-provider" placeholder="Anbieter" required>
-      <input type="number" id="new-price-per-kwh" placeholder="EUR/kWh" step="0.0001" min="0" required>
-      <select id="new-price-source"><option value="">Alle Quellen</option></select>
-      <input type="text" id="new-price-vehicle" placeholder="Fahrzeug (leer = alle)">
-      <input type="date" id="new-price-valid-from" required>
-      <input type="date" id="new-price-valid-to" placeholder="Gültig bis (offen)">
-      <button type="submit">Hinzufügen</button>
-    </form>
-    <p class="muted" id="add-price-error"></p>
+    <p class="empty-hint" id="empty-hint" hidden>
+      Noch keine Ladevorgänge. Quelle unter "Einstellungen" hinzufügen, dann hier "Jetzt abrufen".
+    </p>
   </div>
 </main>
 <script>
@@ -112,38 +99,24 @@ async function api(url, opts) {
   return body;
 }
 
-function fmtDate(iso) {
+function fmtDateTime(iso) {
   if (!iso) return '–';
   return new Date(iso).toLocaleString('de-DE');
 }
 
+function fmtNum(value, decimals, suffix) {
+  if (value === null || value === undefined) return '–';
+  return value.toFixed(decimals).replace('.', ',') + (suffix || '');
+}
+
+let sources = [];
 let sourcesById = {};
 
-async function loadSources() {
-  const { sources } = await api('/api/sources');
+async function loadSourceFilter() {
+  const { sources: loaded } = await api('/api/sources');
+  sources = loaded;
   sourcesById = Object.fromEntries(sources.map((s) => [s.id, s]));
-
-  const body = document.getElementById('sources-body');
-  body.innerHTML = '';
-  for (const s of sources) {
-    const tr = document.createElement('tr');
-    const statusClass = s.last_fetch_status === 'ok' ? 'status-ok'
-      : (s.last_fetch_status ? 'status-error' : '');
-    tr.innerHTML = `
-      <td>${s.name}</td>
-      <td>${s.base_url}</td>
-      <td>${s.enabled ? 'Ja' : 'Nein'}</td>
-      <td>${fmtDate(s.last_fetch_at)}</td>
-      <td class="${statusClass}">${s.last_fetch_status || '–'}</td>
-      <td>
-        <button data-action="fetch" data-id="${s.id}">Jetzt abrufen</button>
-        <button data-action="delete" data-id="${s.id}" class="danger">Löschen</button>
-      </td>
-    `;
-    body.appendChild(tr);
-  }
-
-  const select = document.getElementById('new-price-source');
+  const select = document.getElementById('filter-source');
   const current = select.value;
   select.innerHTML = '<option value="">Alle Quellen</option>';
   for (const s of sources) {
@@ -155,101 +128,78 @@ async function loadSources() {
   select.value = current;
 }
 
-async function loadPrices() {
-  const { prices } = await api('/api/prices');
-  const body = document.getElementById('prices-body');
+async function loadSessions() {
+  const params = new URLSearchParams();
+  const sourceId = document.getElementById('filter-source').value;
+  const vehicle = document.getElementById('filter-vehicle').value;
+  const from = document.getElementById('filter-from').value;
+  const to = document.getElementById('filter-to').value;
+  if (sourceId) params.set('source_id', sourceId);
+  if (vehicle) params.set('vehicle', vehicle);
+  if (from) params.set('from_', from);
+  if (to) params.set('to', to);
+
+  const { sessions: rows } = await api('/api/sessions?' + params.toString());
+  const body = document.getElementById('sessions-body');
   body.innerHTML = '';
-  for (const p of prices) {
+  document.getElementById('session-count').textContent = `${rows.length} Ladevorgänge`;
+  document.getElementById('empty-hint').hidden = rows.length > 0;
+
+  for (const s of rows) {
     const tr = document.createElement('tr');
-    const sourceName = p.source_id ? (sourcesById[p.source_id]?.name || `#${p.source_id}`) : 'Alle';
+    const sourceName = sourcesById[s.source_id]?.name || `#${s.source_id}`;
+    const priceLabel = s.price_provider || 'kein Preis hinterlegt';
+    const flagged = s.cost_delta_flagged;
     tr.innerHTML = `
-      <td>${p.provider}</td>
-      <td>${p.price_per_kwh.toFixed(4)} €</td>
+      <td>${fmtDateTime(s.time_begin)}</td>
       <td>${sourceName}</td>
-      <td>${p.vehicle_name || 'Alle'}</td>
-      <td>${p.valid_from}</td>
-      <td>${p.valid_to || 'offen'}</td>
-      <td><button data-action="delete-price" data-id="${p.id}" class="danger">Löschen</button></td>
+      <td>${s.vehicle_name || '–'}</td>
+      <td>${s.chargepoint_name || '–'}</td>
+      <td class="numeric">${fmtNum(s.energy_kwh, 2, ' kWh')}</td>
+      <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_openwb, 2, ' €')}</td>
+      <td>${priceLabel}</td>
+      <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_used, 2, ' €')}</td>
     `;
     body.appendChild(tr);
   }
 }
 
-document.getElementById('sources-body').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button');
-  if (!btn) return;
-  const id = btn.dataset.id;
-  if (btn.dataset.action === 'fetch') {
-    btn.disabled = true;
+document.getElementById('filter-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  loadSessions();
+});
+
+document.getElementById('fetch-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('fetch-now-btn');
+  const resultEl = document.getElementById('fetch-result');
+  const enabled = sources.filter((s) => s.enabled);
+  if (enabled.length === 0) {
+    resultEl.textContent = 'Keine aktive Quelle -- unter "Einstellungen" hinzufügen.';
+    return;
+  }
+  btn.disabled = true;
+  resultEl.textContent = 'Abruf läuft …';
+  let ok = 0;
+  let failed = 0;
+  for (const s of enabled) {
     try {
-      await api(`/api/sources/${id}/fetch-now`, { method: 'POST' });
+      await api(`/api/sources/${s.id}/fetch-now`, { method: 'POST' });
+      ok++;
     } catch (err) {
-      alert('Abruf fehlgeschlagen: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      loadSources();
+      failed++;
     }
-  } else if (btn.dataset.action === 'delete') {
-    if (!confirm('Quelle wirklich löschen?')) return;
-    await api(`/api/sources/${id}`, { method: 'DELETE' });
-    loadSources();
   }
+  resultEl.textContent = failed === 0
+    ? `${ok} Quelle(n) erfolgreich abgerufen.`
+    : `${ok} Quelle(n) erfolgreich, ${failed} fehlgeschlagen -- Details unter "Einstellungen".`;
+  btn.disabled = false;
+  loadSourceFilter().then(loadSessions);
 });
 
-document.getElementById('add-source-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const name = document.getElementById('new-name').value;
-  const base_url = document.getElementById('new-base-url').value;
-  const errEl = document.getElementById('add-source-error');
-  errEl.textContent = '';
-  try {
-    await api('/api/sources', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, base_url }),
-    });
-    ev.target.reset();
-    loadSources();
-  } catch (err) {
-    errEl.textContent = err.message;
-  }
-});
-
-document.getElementById('prices-body').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button');
-  if (!btn || btn.dataset.action !== 'delete-price') return;
-  if (!confirm('Preis wirklich löschen?')) return;
-  await api(`/api/prices/${btn.dataset.id}`, { method: 'DELETE' });
-  loadPrices();
-});
-
-document.getElementById('add-price-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const provider = document.getElementById('new-provider').value;
-  const price_per_kwh = parseFloat(document.getElementById('new-price-per-kwh').value);
-  const sourceVal = document.getElementById('new-price-source').value;
-  const vehicle_name = document.getElementById('new-price-vehicle').value || null;
-  const valid_from = document.getElementById('new-price-valid-from').value;
-  const valid_to = document.getElementById('new-price-valid-to').value || null;
-  const errEl = document.getElementById('add-price-error');
-  errEl.textContent = '';
-  try {
-    await api('/api/prices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider, price_per_kwh, vehicle_name, valid_from, valid_to,
-        source_id: sourceVal ? parseInt(sourceVal, 10) : null,
-      }),
-    });
-    ev.target.reset();
-    loadPrices();
-  } catch (err) {
-    errEl.textContent = err.message;
-  }
-});
-
-loadSources().then(loadPrices);
+(async function init() {
+  await loadSourceFilter();
+  await loadSessions();
+})();
 </script>
 </body>
 </html>

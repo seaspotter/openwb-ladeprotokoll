@@ -119,7 +119,8 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/pdf_render.py` | Jinja2 (`templates/report_pdf.html`) + WeasyPrint, HTML preview or PDF bytes from the same template |
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |
 | `app/updater.py` | Optional in-app self-update (`git pull` + process restart) |
-| `app/templates/index.html` | Sources + prices dashboard (German UI) — vanilla JS, no build step |
+| `app/templates/index.html` | Landing page (`/`): read-only charge-log overview + "Jetzt abrufen" |
+| `app/templates/settings.html` | Source CRUD, price entry CRUD, backfill control, at `/settings` |
 | `app/templates/report_review.html` | Session/column/price-override selection UI, at `/report-review` |
 | `app/templates/report_pdf.html` | The actual report layout — rendered as both the HTML preview and the PDF |
 

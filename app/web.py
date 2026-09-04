@@ -76,6 +76,11 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request})
+
+
 @router.get("/report-review", response_class=HTMLResponse)
 async def report_review(request: Request):
     return templates.TemplateResponse("report_review.html", {"request": request})

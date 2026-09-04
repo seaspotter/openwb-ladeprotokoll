@@ -114,8 +114,17 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `WORKDIR`.
 - `app/main.py` — app factory, lifespan (DB pool, starts/cancels the
   scheduler task).
-- `app/templates/index.html` — sources + prices dashboard, **in German**:
-  vanilla JS, no build step.
+- `app/templates/index.html` — the landing page (`/`): a read-only charge-log
+  overview (filter by source/vehicle/date, no selection/columns — that's
+  `report_review.html`'s job) plus a "Jetzt abrufen" button that fetches
+  every enabled source's current month. Sources and price entries are
+  deliberately **not** managed here — see `settings.html` — so this page
+  stays focused on "what got fetched", not configuration.
+- `app/templates/settings.html` — source CRUD, price entry CRUD, and the
+  backfill control (`POST /api/sources/{id}/backfill`, `from_month`/
+  `to_month` as "YYYYMM" — the UI's `<input type="month">` gives
+  "YYYY-MM" and just strips the dash) for pulling in months older than
+  the current one, which the daily scheduler/"Jetzt abrufen" never touch.
 - `app/templates/report_review.html` — session/column/price-override
   selection UI (`/report-review`): loads sessions via `/api/sessions`,
   recomputes totals client-side as the selection changes (mirroring

@@ -3,7 +3,27 @@
 Kurze Referenz für die Weboberfläche. Für Installation/Konfiguration siehe
 [DEPLOYMENT.md](DEPLOYMENT.md), für die Architektur [CLAUDE.md](CLAUDE.md).
 
-## Quellen
+## Übersicht (Startseite)
+
+Zeigt alle bereits abgerufenen Ladevorgänge, mit Filter nach Quelle,
+Fahrzeug und Zeitraum.
+
+- **Jetzt abrufen** — ruft den aktuellen Monat aller aktiven Quellen ab
+  und lädt die Tabelle danach neu. Für einzelne Quellen oder ältere Monate
+  siehe "Einstellungen" → Verlauf abrufen.
+- Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
+  Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
+  Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
+  ab, sind beide Spalten rot hervorgehoben.
+
+Diese Ansicht ist rein zur Übersicht — die Auswahl für einen Bericht
+passiert unter "Bericht erstellen".
+
+## Einstellungen
+
+Erreichbar über "Einstellungen" in der Kopfzeile.
+
+### Quellen
 
 Eine Quelle ist eine openWB-Installation, deren Ladeprotokoll erfasst
 werden soll.
@@ -11,9 +31,10 @@ werden soll.
 - **Quelle hinzufügen** — Name (frei wählbar, z. B. "Zuhause") und
   Adresse (IP oder URL, z. B. `192.168.1.10`) eingeben. Ohne Schema wird
   automatisch `http://` angenommen.
-- **Jetzt abrufen** — ruft sofort den aktuellen Monat dieser Quelle ab und
-  aktualisiert Datum/Status der letzten Abfrage in der Tabelle. Ein Fehler
-  (Quelle nicht erreichbar o. ä.) wird in der Status-Spalte angezeigt.
+- **Jetzt abrufen** — ruft sofort den aktuellen Monat dieser einen Quelle
+  ab und aktualisiert Datum/Status der letzten Abfrage in der Tabelle. Ein
+  Fehler (Quelle nicht erreichbar o. ä.) wird in der Status-Spalte
+  angezeigt.
 - **Löschen** — entfernt die Quelle dauerhaft, inklusive aller bereits
   gespeicherten Ladevorgänge dieser Quelle.
 
@@ -22,7 +43,16 @@ Abruf: einmal beim Start der Anwendung und danach alle 24 Stunden werden
 alle aktiven Quellen für den aktuellen Monat neu abgefragt — ohne, dass
 dafür etwas eingestellt werden muss.
 
-## Preise
+### Verlauf abrufen
+
+Sowohl der automatische Abruf als auch "Jetzt abrufen" erfassen immer nur
+den **aktuellen** Monat. Um ältere, bereits vergangene Monate
+nachzuholen (z. B. beim erstmaligen Einrichten einer Quelle): Quelle,
+Start- und Endmonat wählen und "Abrufen". Das kann je nach Zeitraum einen
+Moment dauern; die Anzahl der verarbeiteten Ladevorgänge wird danach
+angezeigt.
+
+### Preise
 
 Ein Preis-Eintrag legt fest, mit welchem Strompreis openWBs eigene
 Kostenberechnung überprüft und ggf. korrigiert wird.

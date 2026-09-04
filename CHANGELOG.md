@@ -6,6 +6,18 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Changed
+- Split the single sources+prices dashboard into two pages, based on
+  real-usage feedback: `/` is now a read-only charge-log overview (filter
+  by source/vehicle/date, a "Jetzt abrufen" button that fetches every
+  enabled source's current month) with no configuration on it; source and
+  price entry management moved to a new `/settings` page.
+- Surfaced the backfill endpoint (`POST /api/sources/{id}/backfill`,
+  which already existed but had no UI) in `/settings` as "Verlauf
+  abrufen": pick a source and a from/to month to pull in history older
+  than the current month, which neither the daily scheduler nor "Jetzt
+  abrufen" ever touch.
+
 ### Fixed
 - CI's Docker image build failed outright (`docker-publish.yml`, caught on
   the first push to GitHub): `Dockerfile` installed `libcairo2` and
