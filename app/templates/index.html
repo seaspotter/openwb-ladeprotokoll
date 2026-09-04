@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>openWB Ladeprotokoll</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2316a34a'/%3E%3Cpath d='M13 3 5 14h5l-1 7 8-11h-5z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --border: #d8dbe2;
+    --text: #1a1d24; --muted: #6b7280; --accent: #2563eb;
+    --ok: #1e7a42; --error: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+      --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+      --ok: #5fbd82; --error: #e5675f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+    --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+    --ok: #5fbd82; --error: #e5675f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .brand-mark { font-weight: 700; color: #16a34a; }
+  header a { color: var(--muted); text-decoration: none; font-size: 13px; margin-left: auto; }
+  header a:hover { color: var(--accent); }
+  main { padding: 16px 20px; max-width: 960px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .status-ok { color: var(--ok); }
+  .status-error { color: var(--error); }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=number], input[type=date], select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  input[type=text] { min-width: 180px; }
+  input[type=number] { width: 100px; }
+  .price-flag { color: var(--error); font-weight: 600; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.danger:hover { border-color: var(--error); color: var(--error); }
+  .muted { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  <a href="/report-review">Bericht erstellen &rarr;</a>
+</header>
+<main>
+  <div class="panel">
+    <h2>Quellen</h2>
+    <table id="sources-table">
+      <thead>
+        <tr><th>Name</th><th>Adresse</th><th>Aktiv</th><th>Letzter Abruf</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody id="sources-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Quelle hinzufügen</h2>
+    <form class="inline" id="add-source-form">
+      <input type="text" id="new-name" placeholder="Name (z.B. Zuhause)" required>
+      <input type="text" id="new-base-url" placeholder="IP-Adresse oder URL" required>
+      <button type="submit">Hinzufügen</button>
+    </form>
+    <p class="muted" id="add-source-error"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Preise</h2>
+    <table id="prices-table">
+      <thead>
+        <tr>
+          <th>Anbieter</th><th>Preis/kWh</th><th>Quelle</th><th>Fahrzeug</th>
+          <th>Gültig ab</th><th>Gültig bis</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="prices-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Preis hinzufügen</h2>
+    <form class="inline" id="add-price-form">
+      <input type="text" id="new-provider" placeholder="Anbieter" required>
+      <input type="number" id="new-price-per-kwh" placeholder="EUR/kWh" step="0.0001" min="0" required>
+      <select id="new-price-source"><option value="">Alle Quellen</option></select>
+      <input type="text" id="new-price-vehicle" placeholder="Fahrzeug (leer = alle)">
+      <input type="date" id="new-price-valid-from" required>
+      <input type="date" id="new-price-valid-to" placeholder="Gültig bis (offen)">
+      <button type="submit">Hinzufügen</button>
+    </form>
+    <p class="muted" id="add-price-error"></p>
+  </div>
+</main>
+<script>
+async function api(url, opts) {
+  const resp = await fetch(url, opts);
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(body.detail || resp.statusText);
+  return body;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleString('de-DE');
+}
+
+let sourcesById = {};
+
+async function loadSources() {
+  const { sources } = await api('/api/sources');
+  sourcesById = Object.fromEntries(sources.map((s) => [s.id, s]));
+
+  const body = document.getElementById('sources-body');
+  body.innerHTML = '';
+  for (const s of sources) {
+    const tr = document.createElement('tr');
+    const statusClass = s.last_fetch_status === 'ok' ? 'status-ok'
+      : (s.last_fetch_status ? 'status-error' : '');
+    tr.innerHTML = `
+      <td>${s.name}</td>
+      <td>${s.base_url}</td>
+      <td>${s.enabled ? 'Ja' : 'Nein'}</td>
+      <td>${fmtDate(s.last_fetch_at)}</td>
+      <td class="${statusClass}">${s.last_fetch_status || '–'}</td>
+      <td>
+        <button data-action="fetch" data-id="${s.id}">Jetzt abrufen</button>
+        <button data-action="delete" data-id="${s.id}" class="danger">Löschen</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  }
+
+  const select = document.getElementById('new-price-source');
+  const current = select.value;
+  select.innerHTML = '<option value="">Alle Quellen</option>';
+  for (const s of sources) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
+async function loadPrices() {
+  const { prices } = await api('/api/prices');
+  const body = document.getElementById('prices-body');
+  body.innerHTML = '';
+  for (const p of prices) {
+    const tr = document.createElement('tr');
+    const sourceName = p.source_id ? (sourcesById[p.source_id]?.name || `#${p.source_id}`) : 'Alle';
+    tr.innerHTML = `
+      <td>${p.provider}</td>
+      <td>${p.price_per_kwh.toFixed(4)} €</td>
+      <td>${sourceName}</td>
+      <td>${p.vehicle_name || 'Alle'}</td>
+      <td>${p.valid_from}</td>
+      <td>${p.valid_to || 'offen'}</td>
+      <td><button data-action="delete-price" data-id="${p.id}" class="danger">Löschen</button></td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+document.getElementById('sources-body').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.action === 'fetch') {
+    btn.disabled = true;
+    try {
+      await api(`/api/sources/${id}/fetch-now`, { method: 'POST' });
+    } catch (err) {
+      alert('Abruf fehlgeschlagen: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      loadSources();
+    }
+  } else if (btn.dataset.action === 'delete') {
+    if (!confirm('Quelle wirklich löschen?')) return;
+    await api(`/api/sources/${id}`, { method: 'DELETE' });
+    loadSources();
+  }
+});
+
+document.getElementById('add-source-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const name = document.getElementById('new-name').value;
+  const base_url = document.getElementById('new-base-url').value;
+  const errEl = document.getElementById('add-source-error');
+  errEl.textContent = '';
+  try {
+    await api('/api/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, base_url }),
+    });
+    ev.target.reset();
+    loadSources();
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+
+document.getElementById('prices-body').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button');
+  if (!btn || btn.dataset.action !== 'delete-price') return;
+  if (!confirm('Preis wirklich löschen?')) return;
+  await api(`/api/prices/${btn.dataset.id}`, { method: 'DELETE' });
+  loadPrices();
+});
+
+document.getElementById('add-price-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const provider = document.getElementById('new-provider').value;
+  const price_per_kwh = parseFloat(document.getElementById('new-price-per-kwh').value);
+  const sourceVal = document.getElementById('new-price-source').value;
+  const vehicle_name = document.getElementById('new-price-vehicle').value || null;
+  const valid_from = document.getElementById('new-price-valid-from').value;
+  const valid_to = document.getElementById('new-price-valid-to').value || null;
+  const errEl = document.getElementById('add-price-error');
+  errEl.textContent = '';
+  try {
+    await api('/api/prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider, price_per_kwh, vehicle_name, valid_from, valid_to,
+        source_id: sourceVal ? parseInt(sourceVal, 10) : null,
+      }),
+    });
+    ev.target.reset();
+    loadPrices();
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+
+loadSources().then(loadPrices);
+</script>
+</body>
+</html>

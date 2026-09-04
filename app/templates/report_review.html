@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Bericht erstellen – openWB Ladeprotokoll</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2316a34a'/%3E%3Cpath d='M13 3 5 14h5l-1 7 8-11h-5z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --border: #d8dbe2;
+    --text: #1a1d24; --muted: #6b7280; --accent: #2563eb;
+    --ok: #1e7a42; --error: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+      --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+      --ok: #5fbd82; --error: #e5675f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+    --text: #d8dbe2; --muted: #8a8f9c; --accent: #4da3ff;
+    --ok: #5fbd82; --error: #e5675f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .brand-mark { font-weight: 700; color: #16a34a; }
+  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  header a:hover { color: var(--accent); }
+  main { padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; }
+  td.numeric, th.numeric { text-align: right; }
+  .flagged { color: var(--error); font-weight: 600; }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=date], select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; }
+  label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .totals-grid .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .totals-grid .stat .label { font-size: 11px; color: var(--muted); }
+  .totals-grid .stat .value { font-size: 15px; font-weight: 600; }
+  #preview-frame { width: 100%; height: 600px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+  .session-count { font-size: 12px; color: var(--muted); margin-left: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="brand-mark">openWB</span> Ladeprotokoll</h1>
+  <a href="/">&larr; Übersicht</a>
+</header>
+<main>
+  <div class="panel">
+    <h2>Filter</h2>
+    <form class="inline" id="filter-form">
+      <select id="filter-source"><option value="">Alle Quellen</option></select>
+      <input type="text" id="filter-vehicle" placeholder="Fahrzeug (leer = alle)">
+      <input type="date" id="filter-from">
+      <input type="date" id="filter-to">
+      <button type="submit">Laden</button>
+      <span class="session-count" id="session-count"></span>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>PDF-Spalten</h2>
+    <div class="columns-grid" id="columns-grid"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Ladevorgänge</h2>
+    <table id="sessions-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="select-all" checked></th>
+          <th>Beginn</th><th>Fahrzeug</th><th>Ladepunkt</th>
+          <th class="numeric">Energie</th><th class="numeric">Kosten (openWB)</th>
+          <th>Preis</th><th class="numeric">Kosten (verwendet)</th>
+        </tr>
+      </thead>
+      <tbody id="sessions-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Summe der Auswahl</h2>
+    <div class="totals-grid" id="totals-grid"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Bericht</h2>
+    <form class="inline" id="report-form">
+      <input type="text" id="report-title" placeholder="Titel (z.B. August 2026)" required>
+      <button type="button" id="preview-btn">Vorschau</button>
+      <button type="submit" class="primary">Bericht erzeugen</button>
+    </form>
+    <p class="muted" id="report-error"></p>
+    <p class="muted" id="report-result"></p>
+    <iframe id="preview-frame" hidden></iframe>
+  </div>
+
+  <div class="panel">
+    <h2>Bisherige Berichte</h2>
+    <table id="reports-table">
+      <thead>
+        <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th class="numeric">Kosten (korrigiert)</th><th></th></tr>
+      </thead>
+      <tbody id="reports-body"></tbody>
+    </table>
+  </div>
+</main>
+<script>
+async function api(url, opts) {
+  const resp = await fetch(url, opts);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.detail || resp.statusText);
+  }
+  const contentType = resp.headers.get('content-type') || '';
+  return contentType.includes('application/json') ? resp.json() : resp.text();
+}
+
+function fmtNum(value, decimals, suffix) {
+  if (value === null || value === undefined) return '–';
+  return value.toFixed(decimals).replace('.', ',') + (suffix || '');
+}
+
+function fmtDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '–';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+let sessions = [];
+let selection = {}; // id -> { checked: bool, override: 'auto' | 'openwb' | priceEntryId(string) }
+let priceEntries = [];
+let priceEntriesById = {};
+let selectedColumns = new Set();
+
+async function loadSourceFilter() {
+  const { sources } = await api('/api/sources');
+  const select = document.getElementById('filter-source');
+  for (const s of sources) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  }
+}
+
+async function loadColumns() {
+  const { columns } = await api('/api/report-columns');
+  const grid = document.getElementById('columns-grid');
+  grid.innerHTML = '';
+  for (const c of columns) {
+    selectedColumns.add(c.key);
+    const label = document.createElement('label');
+    label.className = 'check';
+    label.innerHTML = `<input type="checkbox" data-column="${c.key}" checked> ${c.label}`;
+    grid.appendChild(label);
+  }
+  grid.addEventListener('change', (ev) => {
+    const cb = ev.target;
+    if (!cb.dataset.column) return;
+    if (cb.checked) selectedColumns.add(cb.dataset.column);
+    else selectedColumns.delete(cb.dataset.column);
+  });
+}
+
+async function loadPriceEntries() {
+  const { prices } = await api('/api/prices');
+  priceEntries = prices;
+  priceEntriesById = Object.fromEntries(prices.map((p) => [String(p.id), p]));
+}
+
+function costUsedFor(s, overrideVal) {
+  if (overrideVal === 'openwb') return s.cost_openwb;
+  if (overrideVal && overrideVal !== 'auto') {
+    const entry = priceEntriesById[overrideVal];
+    if (entry && s.energy_kwh != null) return s.energy_kwh * entry.price_per_kwh;
+    return s.cost_openwb;
+  }
+  return s.cost_used;
+}
+
+function overrideOptionsHtml(s, current) {
+  const autoLabel = s.price_provider ? `Automatisch (${s.price_provider})` : 'Automatisch (kein Preis)';
+  let html = `<option value="auto" ${current === 'auto' ? 'selected' : ''}>${autoLabel}</option>`;
+  html += `<option value="openwb" ${current === 'openwb' ? 'selected' : ''}>openWB-Wert verwenden</option>`;
+  for (const p of priceEntries) {
+    const sel = current === String(p.id) ? 'selected' : '';
+    html += `<option value="${p.id}" ${sel}>${p.provider} (${p.price_per_kwh.toFixed(4)} €/kWh)</option>`;
+  }
+  return html;
+}
+
+function renderSessionsTable() {
+  const body = document.getElementById('sessions-body');
+  body.innerHTML = '';
+  for (const s of sessions) {
+    const sel = selection[s.id];
+    const costUsed = costUsedFor(s, sel.override);
+    const flagged = sel.override === 'auto' && s.cost_delta_flagged;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" data-id="${s.id}" ${sel.checked ? 'checked' : ''}></td>
+      <td>${new Date(s.time_begin).toLocaleString('de-DE')}</td>
+      <td>${s.vehicle_name || '–'}</td>
+      <td>${s.chargepoint_name || '–'}</td>
+      <td class="numeric">${fmtNum(s.energy_kwh, 2, ' kWh')}</td>
+      <td class="numeric">${fmtNum(s.cost_openwb, 2, ' €')}</td>
+      <td><select data-override-id="${s.id}">${overrideOptionsHtml(s, sel.override)}</select></td>
+      <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(costUsed, 2, ' €')}</td>
+    `;
+    body.appendChild(tr);
+  }
+  recomputeTotals();
+}
+
+function recomputeTotals() {
+  let duration = 0, energy = 0, discharged = 0, range = 0, costOpenwb = 0, costUsed = 0, count = 0;
+  for (const s of sessions) {
+    const sel = selection[s.id];
+    if (!sel.checked) continue;
+    count++;
+    duration += s.time_charged_seconds || 0;
+    energy += s.energy_kwh || 0;
+    discharged += s.energy_discharged_kwh || 0;
+    range += s.range_charged_km || 0;
+    costOpenwb += s.cost_openwb || 0;
+    costUsed += costUsedFor(s, sel.override) || 0;
+  }
+  document.getElementById('session-count').textContent = `${sessions.length} Ladevorgänge geladen`;
+  const grid = document.getElementById('totals-grid');
+  grid.innerHTML = `
+    <div class="stat"><div class="label">Ausgewählt</div><div class="value">${count}</div></div>
+    <div class="stat"><div class="label">Dauer</div><div class="value">${fmtDuration(duration)}</div></div>
+    <div class="stat"><div class="label">Energie</div><div class="value">${fmtNum(energy, 2, ' kWh')}</div></div>
+    <div class="stat"><div class="label">Entladene Energie</div><div class="value">${fmtNum(discharged, 2, ' kWh')}</div></div>
+    <div class="stat"><div class="label">Reichweite</div><div class="value">${fmtNum(range, 0, ' km')}</div></div>
+    <div class="stat"><div class="label">Kosten (openWB)</div><div class="value">${fmtNum(costOpenwb, 2, ' €')}</div></div>
+    <div class="stat"><div class="label">Kosten (korrigiert)</div><div class="value">${fmtNum(costUsed, 2, ' €')}</div></div>
+  `;
+}
+
+document.getElementById('sessions-body').addEventListener('change', (ev) => {
+  const target = ev.target;
+  if (target.dataset.id) {
+    selection[target.dataset.id].checked = target.checked;
+    recomputeTotals();
+  } else if (target.dataset.overrideId) {
+    selection[target.dataset.overrideId].override = target.value;
+    renderSessionsTable();
+  }
+});
+
+document.getElementById('select-all').addEventListener('change', (ev) => {
+  for (const id in selection) selection[id].checked = ev.target.checked;
+  renderSessionsTable();
+});
+
+async function loadSessions() {
+  const params = new URLSearchParams();
+  const sourceId = document.getElementById('filter-source').value;
+  const vehicle = document.getElementById('filter-vehicle').value;
+  const from = document.getElementById('filter-from').value;
+  const to = document.getElementById('filter-to').value;
+  if (sourceId) params.set('source_id', sourceId);
+  if (vehicle) params.set('vehicle', vehicle);
+  if (from) params.set('from_', from);
+  if (to) params.set('to', to);
+
+  const { sessions: loaded } = await api('/api/sessions?' + params.toString());
+  sessions = loaded;
+  selection = {};
+  for (const s of sessions) {
+    selection[s.id] = { checked: true, override: 'auto' };
+  }
+  document.getElementById('select-all').checked = true;
+  renderSessionsTable();
+}
+
+function currentSelectionPayload() {
+  const session_ids = [];
+  const price_overrides = {};
+  for (const s of sessions) {
+    const sel = selection[s.id];
+    if (!sel.checked) continue;
+    session_ids.push(s.id);
+    if (sel.override && sel.override !== 'auto') {
+      price_overrides[s.id] = sel.override === 'openwb' ? 'openwb' : parseInt(sel.override, 10);
+    }
+  }
+  return {
+    session_ids,
+    columns: Array.from(selectedColumns),
+    price_overrides,
+  };
+}
+
+document.getElementById('filter-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  loadSessions();
+});
+
+document.getElementById('preview-btn').addEventListener('click', async () => {
+  const errEl = document.getElementById('report-error');
+  const frame = document.getElementById('preview-frame');
+  errEl.textContent = '';
+  try {
+    const html = await api('/api/reports/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentSelectionPayload()),
+    });
+    frame.hidden = false;
+    frame.srcdoc = html;
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+
+document.getElementById('report-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const errEl = document.getElementById('report-error');
+  const resultEl = document.getElementById('report-result');
+  errEl.textContent = '';
+  resultEl.textContent = '';
+  try {
+    const payload = currentSelectionPayload();
+    payload.title = document.getElementById('report-title').value;
+    const report = await api('/api/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    resultEl.innerHTML = `Bericht erzeugt: <a href="/reports/${report.id}/pdf" target="_blank">PDF öffnen</a>`;
+    loadReports();
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+
+async function loadReports() {
+  const { reports } = await api('/reports');
+  const body = document.getElementById('reports-body');
+  body.innerHTML = '';
+  for (const r of reports) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.title}</td>
+      <td>${new Date(r.created_at).toLocaleString('de-DE')}</td>
+      <td class="numeric">${r.session_count}</td>
+      <td class="numeric">${fmtNum(r.total_cost_corrected, 2, ' €')}</td>
+      <td>
+        <a href="/reports/${r.id}/pdf" target="_blank">PDF</a>
+        &nbsp;<button data-action="delete-report" data-id="${r.id}" class="danger">Löschen</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+document.getElementById('reports-body').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button');
+  if (!btn || btn.dataset.action !== 'delete-report') return;
+  if (!confirm('Bericht wirklich löschen?')) return;
+  await api(`/reports/${btn.dataset.id}`, { method: 'DELETE' });
+  loadReports();
+});
+
+(async function init() {
+  await Promise.all([loadSourceFilter(), loadColumns(), loadPriceEntries()]);
+  await loadSessions();
+  await loadReports();
+})();
+</script>
+</body>
+</html>

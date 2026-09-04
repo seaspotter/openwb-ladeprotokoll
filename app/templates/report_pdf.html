@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>{{ meta.title }}</title>
+<style>
+  @page {
+    /* Landscape: the sessions table has up to 14 columns when all are
+       selected (see report_build.py's COLUMN_LABELS) -- portrait's ~17cm
+       printable width cuts the last columns off the page, landscape's
+       ~26cm comfortably fits them all at a still-readable font size. */
+    size: A4 landscape;
+    margin: 1.8cm 1.4cm 2cm 1.4cm;
+    @bottom-center {
+      content: "Seite " counter(page) " von " counter(pages);
+      font-size: 9px;
+      color: #666666;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: #1a1d24; background: #ffffff;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 11px; line-height: 1.4;
+  }
+  header.doc-header {
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 2px solid #16a34a; padding-bottom: 10px; margin-bottom: 14px;
+  }
+  header.doc-header img { width: 40px; height: 40px; }
+  header.doc-header h1 { font-size: 18px; margin: 0 0 2px; }
+  header.doc-header .subtitle { font-size: 11px; color: #555555; }
+  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10.5px; }
+  .meta-table td { padding: 2px 0; vertical-align: top; }
+  .meta-table td.label { color: #555555; width: 140px; }
+
+  h2.section-title {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em;
+    color: #555555; margin: 18px 0 6px;
+  }
+
+  table.price-basis, table.sessions, table.totals {
+    width: 100%; border-collapse: collapse; font-size: 10px;
+  }
+  table.price-basis th, table.price-basis td,
+  table.sessions th, table.sessions td,
+  table.totals th, table.totals td {
+    border: 1px solid #d8dbe2; padding: 4px 6px; text-align: left;
+  }
+  table.price-basis th, table.sessions th, table.totals th {
+    background: #f5f6f8; font-weight: 600;
+  }
+  table.sessions thead { display: table-header-group; }
+  table.sessions tbody tr { page-break-inside: avoid; }
+  table.sessions td.numeric, table.totals td.numeric { text-align: right; }
+  table.sessions td.flagged { color: #b91c1c; font-weight: 600; }
+
+  table.totals td.label { font-weight: 600; background: #f5f6f8; }
+
+  .doc-footer {
+    /* Keeps the disclaimer and signature line together as one unit -- an
+       earlier version let them break independently, which pushed just the
+       signature line onto its own near-blank page once a report's content
+       ran close to a page boundary (reliably reproduced even with a
+       2-session test report). */
+    page-break-inside: avoid;
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid #d8dbe2;
+    font-size: 9px; color: #555555;
+  }
+  .doc-footer .disclaimer { margin-bottom: 14px; }
+  .signature-line {
+    width: 260px; border-top: 1px solid #1a1d24; padding-top: 3px; margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2316a34a'/%3E%3Cpath d='M13 3 5 14h5l-1 7 8-11h-5z' fill='white'/%3E%3C/svg%3E" alt="">
+  <div>
+    <h1>Ladeprotokoll &ndash; Dienstwagenabrechnung</h1>
+    <div class="subtitle">Bericht {{ meta.report_id }} &middot; erzeugt am {{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}</div>
+  </div>
+</header>
+
+<table class="meta-table">
+  <tr>
+    <td class="label">Zeitraum</td>
+    <td>{{ meta.period_from or "&ndash;" }} bis {{ meta.period_to or "&ndash;" }}</td>
+  </tr>
+  <tr>
+    <td class="label">Quelle(n)</td>
+    <td>{{ meta.source_names | join(", ") if meta.source_names else "&ndash;" }}</td>
+  </tr>
+  <tr>
+    <td class="label">Fahrzeug(e)</td>
+    <td>{{ meta.vehicle_names | join(", ") if meta.vehicle_names else "&ndash;" }}</td>
+  </tr>
+</table>
+
+{% if data.price_basis %}
+<h2 class="section-title">Preisbasis</h2>
+<table class="price-basis">
+  <thead>
+    <tr><th>Anbieter</th><th>Preis/kWh</th><th>Gültig ab</th><th>Gültig bis</th><th>Ladevorgänge</th></tr>
+  </thead>
+  <tbody>
+    {% for p in data.price_basis %}
+    <tr>
+      <td>{{ p.provider }}</td>
+      <td>{{ "%.4f"|format(p.price_per_kwh)|replace(".", ",") }} &euro;</td>
+      <td>{{ p.valid_from }}</td>
+      <td>{{ p.valid_to or "offen" }}</td>
+      <td>{{ p.session_count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2 class="section-title">Ladevorgänge</h2>
+<table class="sessions">
+  <thead>
+    <tr>
+      {% for label in data.column_labels %}<th>{{ label }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in data.rows %}
+    <tr>
+      {% for col in data.columns %}
+      <td class="{{ 'flagged' if row.delta_flagged and col in ('cost_openwb', 'cost_corrected') else '' }}">{{ row.cells[col] }}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2 class="section-title">Summe</h2>
+<table class="totals">
+  <tr><td class="label">Dauer</td><td class="numeric">{{ data.totals.duration_display }}</td></tr>
+  <tr><td class="label">Energie</td><td class="numeric">{{ data.totals.energy_display }}</td></tr>
+  <tr><td class="label">Entladene Energie</td><td class="numeric">{{ data.totals.energy_discharged_display }}</td></tr>
+  <tr><td class="label">Reichweite</td><td class="numeric">{{ data.totals.range_display }}</td></tr>
+  <tr><td class="label">Kosten (openWB)</td><td class="numeric">{{ data.totals.cost_openwb_display }}</td></tr>
+  <tr><td class="label">Kosten (korrigiert)</td><td class="numeric">{{ data.totals.cost_corrected_display }}</td></tr>
+</table>
+
+<div class="doc-footer">
+  <p class="disclaimer">
+    Dieses Dokument spiegelt die von openWB erfassten Ladedaten zum Zeitpunkt der Erzeugung
+    wider (Bericht {{ meta.report_id }}, erzeugt am {{ meta.generated_at.strftime("%d.%m.%Y %H:%M") }}).
+    Nachträgliche Änderungen an den Quelldaten in openWB wirken sich nicht auf dieses bereits
+    erzeugte Dokument aus.
+  </p>
+  <div class="signature-line">Unterschrift Fahrzeughalter / Datum</div>
+</div>
+
+</body>
+</html>

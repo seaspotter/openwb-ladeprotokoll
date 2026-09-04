@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openwb_ladeprotokoll
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openwb_ladeprotokoll}
+      POSTGRES_DB: openwb_ladeprotokoll
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openwb_ladeprotokoll"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Same variable as postgres's own POSTGRES_PASSWORD above -- only set
+      # it once in .env. app/config.py builds the full connection string
+      # itself (user/db/host/port match the postgres service below, fixed
+      # values a standard deployment doesn't need to vary).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openwb_ladeprotokoll}
+      PORT: ${PORT:-8080}
+      # Container defaults to UTC otherwise, which shows up in app-generated
+      # timestamps (report generation date, "Letzter Abruf"). Session
+      # Beginn/Ende timestamps come straight from openWB and are unaffected.
+      TZ: ${TZ:-Europe/Berlin}
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    volumes:
+      # Mounts the whole repo checkout onto WORKDIR (/app), so `git pull`
+      # (on the host, or via the in-app "Update" button, run inside the
+      # container against this same mount) updates the running code
+      # immediately -- a restart then picks it up, no image rebuild needed
+      # for pure code/template changes. Comment out for a fully immutable
+      # deployment; self-update then just won't be offered in the UI.
+      - .:/app
+
+volumes:
+  postgres_data:
