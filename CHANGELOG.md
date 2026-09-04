@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
 ### Added
 - Statistik's corrected cost now prices each session's actual energy mix
   instead of one flat rate over its total kWh: the grid-sourced share
