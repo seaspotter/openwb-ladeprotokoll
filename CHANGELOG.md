@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-04
+
 ### Added
 - CI: `.github/workflows/release.yml` publishes an actual GitHub Release
   on every `vX.Y.Z` tag push, with the matching `## [X.Y.Z]` CHANGELOG.md
