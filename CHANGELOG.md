@@ -7,6 +7,18 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Fixed
+- CI's Docker image build failed outright (`docker-publish.yml`, caught on
+  the first push to GitHub): `Dockerfile` installed `libcairo2` and
+  `libgdk-pixbuf2.0-0` for WeasyPrint per older install guides, but
+  WeasyPrint 53+ (we're on 63.1) dropped that dependency entirely -- PDF
+  output goes through its own `pydyf` backend now, images through Pillow,
+  both plain pip packages already in `requirements.txt`. Debian trixie
+  (the current `python:3.12-slim` base) renamed/dropped
+  `libgdk-pixbuf2.0-0` with no direct replacement in its default repos,
+  which is what actually broke the build; the real fix is removing both
+  now-unnecessary packages (confirmed via WeasyPrint's own FFI bindings
+  module, which only references `pango`/`pangoft2`/`fontconfig`/
+  `harfbuzz`), not chasing the renamed package.
 - `chargelog_parse.py` had the openWB UI's "Energie" and "Energie seit
   Anstecken" columns swapped (`imported_since_mode_switch` is the per-row
   figure to sum for a report total; `imported_since_plugged` is

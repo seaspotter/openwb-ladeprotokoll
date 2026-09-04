@@ -7,13 +7,21 @@ WORKDIR /app
 # tzdata: without it, setting TZ (see docker-compose.yml) has nothing to
 # resolve against, and datetime.now() (report generation timestamps) stays
 # on the container's default UTC regardless of TZ.
-# libpango/libcairo/libgdk-pixbuf/fonts-liberation/shared-mime-info: WeasyPrint's
-# own system dependencies for HTML->PDF rendering (app/pdf_render.py) -- these
-# aren't pip-installable, unlike the rest of requirements.txt.
+# libpango/libpangoft2/fonts-liberation: WeasyPrint's own system
+# dependencies for HTML->PDF rendering (app/pdf_render.py) -- these aren't
+# pip-installable, unlike the rest of requirements.txt. WeasyPrint 53+
+# dropped its cairo/gdk-pixbuf dependency (PDF output goes through its own
+# pydyf backend now, images through Pillow -- both pure pip packages, see
+# requirements.txt), so libcairo2/libgdk-pixbuf2.0-0/libpangocairo-1.0-0/
+# shared-mime-info are NOT needed -- confirmed by checking WeasyPrint
+# 63.1's own FFI bindings module, which only references pango/pangoft2/
+# fontconfig/harfbuzz. Including the no-longer-needed ones broke the CI
+# image build outright: Debian trixie (this image's base as of this
+# writing) renamed/dropped libgdk-pixbuf2.0-0 entirely, with no like-for-
+# like replacement in trixie's default repos.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git tzdata \
-    libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
-    libgdk-pixbuf2.0-0 libcairo2 fonts-liberation shared-mime-info \
+    libpango-1.0-0 libpangoft2-1.0-0 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # All our Python dependencies have prebuilt wheels for amd64 and arm64 -- the

@@ -71,12 +71,15 @@ there's none built in.
 
 ## Troubleshooting
 
-- **PDF generation fails at startup / in the container**: WeasyPrint
-  needs system libraries (`libpango`, `libcairo`, `libgdk-pixbuf`, etc. —
-  see the `apt-get install` list in `Dockerfile`) that aren't
-  pip-installable. These are already baked into the published image; if
-  you're building your own variant of the Dockerfile, don't drop that
-  layer.
+- **PDF generation fails at startup / in the container**: WeasyPrint needs
+  Pango (`libpango-1.0-0`, `libpangoft2-1.0-0`) and some usable fonts
+  (`fonts-liberation`) — see the `apt-get install` list in `Dockerfile`,
+  and its comment for why *not* `libcairo2`/`libgdk-pixbuf2.0-0` despite
+  older WeasyPrint install guides mentioning them (WeasyPrint 53+ dropped
+  that dependency; including them broke a CI build outright once Debian
+  trixie renamed/dropped `libgdk-pixbuf2.0-0` with no direct replacement).
+  These are already baked into the published image; if you're building
+  your own variant of the Dockerfile, don't drop that layer.
 - **A source's fetch keeps failing**: check the source's status on the
   dashboard, and confirm `http://<that-openWB-IP>/openWB/data/charge_log/<yyyymm>.json`
   is actually reachable from *inside* the app container (not just your
