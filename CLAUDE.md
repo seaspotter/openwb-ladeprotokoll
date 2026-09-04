@@ -135,8 +135,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   or a data source that never populates it), the whole session defaults
   to 100% grid — the same flat-rate result this function always had, and
   the conservative choice when the real mix is unknown (it never invents
-  a PV/battery discount that may not have applied). Unit tested,
-  including the split-pricing and unknown-split-defaults-to-grid cases.
+  a PV/battery discount that may not have applied). `corrected_cost` is
+  now a thin wrapper around `corrected_cost_breakdown`, which returns the
+  three components (`CostBreakdown.grid`/`.pv`/`.bat`, plus a `.total`
+  property) separately rather than pre-summed — added so `/statistik`'s
+  Kosten chart can stack Netz-/PV-/Speicher-Kosten per period the same
+  way its Energiequellen chart stacks kWh, not just show one blended bar.
+  Unit tested, including the split-pricing, breakdown-components, and
+  unknown-split-defaults-to-grid cases.
   **Scope, corrected same day**: this function itself is source-agnostic
   about *where* it's used, but only `web.py`'s `/api/statistics` route
   actually calls it with the split-pricing kwargs — an initial version
@@ -203,6 +209,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   distinction. `cost` follows the same one-column simplification
   `report_build.py` uses (`cost_basis` picks `cost_openwb` or the
   already-fallback-aware `cost_used`, never both side by side).
+  `PeriodStats`/`VehicleStats` also carry `cost_grid`/`cost_pv`/`cost_bat`
+  — the same total split by source instead of summed, for the Kosten
+  chart's stacked bars — accumulated only when `cost_basis="corrected"`
+  (from each session's `cost_corrected_grid`/`_pv`/`_bat`, present only
+  when `web.py` called `_query_sessions` with `split_pv_bat=True`); all
+  three stay `0.0` under `cost_basis="openwb"`, since openWB's own cost
+  was never priced per source to begin with — `cost_grid + cost_pv +
+  cost_bat` always equals `cost` exactly when using the corrected basis.
   `aggregate_by_vehicle` shares the exact same per-bucket accumulation
   (`_accumulate`/`_empty_bucket`) but groups by `vehicle_name` instead of
   time period, sorted by energy descending (the vehicle that charged the
@@ -282,7 +296,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `/api/statistics` without being asked — an earlier version applied it
   everywhere and visibly changed every "Kosten (korrigiert)" figure in
   the app the moment PV-/Batterie-Preis were set, which the user had not
-  wanted. Plain
+  wanted. When `split_pv_bat=True`, each session dict also gets
+  `cost_corrected_grid`/`cost_corrected_pv`/`cost_corrected_bat` (via
+  `price_entries.corrected_cost_breakdown`, `0.0` when no price entry
+  matched) for `statistics.py`'s per-source Kosten chart — these three
+  fields are only ever present under `split_pv_bat=True`, so nothing
+  else should read them. Plain
   parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns
   as `Decimal`; anything feeding `price_entries.py`/`report_build.py`/
   `statistics.py` converts to `float` first (`_to_float`, and
@@ -425,7 +444,20 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   header padding, `17px` h1 with `letter-spacing: -0.01em`, `6px 8px`
   control padding) for the same reason — check openwb-logger's own
   `index.html` `<style>` before changing these again, don't just pick new
-  numbers. Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
+  numbers. Every `<label>` in the modal (not just ones with `class="check"`)
+  gets one shared rule — `display: inline-flex; align-items: center; gap:
+  6px; font-size: 13px` — so a bare label like "Kosten-Spalte zeigt:" or
+  "PV-Preis (€/kWh):" sits at the same size as the inputs/buttons/table
+  text around it; before this, only `label.check` had an explicit
+  font-size and everything else fell back to the body's larger default,
+  a real inconsistency caught from a user screenshot with several plain
+  labels visibly bigger than their neighbors. `input[type=checkbox]` also
+  gets a shared `accent-color: var(--accent)`/`14px` size rule (was
+  unstyled browser default before), and `input[type=time]` was added to
+  the already-styled-input selector list (`auto-fetch-time` was
+  previously the one input in the modal with no border/background/
+  padding at all, plain browser default sitting next to styled siblings).
+  Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
   Berichts-Einstellungen (Fahrzeuge added between Preise and Verlauf
   abrufen since both Preise and Fahrzeuge key off vehicle names — don't
   reorder without reason). Source/price entry add-forms are collapsed
@@ -492,8 +524,25 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `report_review.html`, now four cards including a "PV-Eigenverbrauch"
   percentage computed client-side from the period totals: `(pv + bat) /
   energy`), two Chart.js bar charts fed by `GET /api/statistics` — a
-  stacked one for the grid/PV/battery/chargepoint kWh split, a plain one
-  for cost — and a "Nach Fahrzeug" table (from the same response's
+  stacked one for the grid/PV/battery/chargepoint kWh split
+  (`chart-energy`), and one for cost (`chart-cost`) that mirrors it:
+  under `cost_basis="corrected"`, `chart-cost` is *also* stacked, with
+  Netz-/PV-/Speicher-Kosten datasets in the exact same colors as
+  `chart-energy`'s Netz/PV/Speicher (`#6b7280`/`#16a34a`/`#f59e0b`) fed by
+  `PeriodStats.cost_grid`/`cost_pv`/`cost_bat` — deliberately no
+  "Ladepunkt"/blue series here (chargepoint-sourced cost is already
+  folded into `cost_bat`, see `price_entries.corrected_cost_breakdown`),
+  since blue is `chart-energy`'s "Ladepunkt" color and reusing it for an
+  unrelated cost bar was a real reported inconsistency. A `#cost-breakdown`
+  line under the chart shows the three grand totals (Netz/PV/Speicher
+  summed across all shown periods) so the reader isn't left eyeballing
+  stacked-bar heights to get an overall split. Under `cost_basis="openwb"`
+  there's nothing to split (openWB's own cost was never priced per
+  source), so `chart-cost` falls back to a single flat blue bar (same as
+  before this split existed) and `#cost-breakdown` stays hidden —
+  `currentCostBasis` (set once by `loadCostBasisLabel()` at page load)
+  is what `loadStatistics()` branches on — and a "Nach Fahrzeug" table
+  (from the same response's
   `by_vehicle`) for comparing vehicles against each other rather than
   only against time, with per-vehicle Netz/PV/Speicher percentage columns
   (each `energy_*_kwh / energy_kwh`, client-side, mirroring the stacked

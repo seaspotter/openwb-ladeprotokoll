@@ -20,7 +20,12 @@ from .app_settings import update_settings as update_app_settings
 from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
-from .price_entries import PriceEntry, decide_price, match_and_decide
+from .price_entries import (
+    PriceEntry,
+    corrected_cost_breakdown,
+    decide_price,
+    match_and_decide,
+)
 from .report_build import COLUMN_LABELS, ReportBuildError
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
@@ -393,6 +398,22 @@ async def _query_sessions(
         d["cost_used"] = decision.cost_used
         d["cost_delta"] = decision.delta
         d["cost_delta_flagged"] = decision.delta_flagged
+        if split_pv_bat:
+            breakdown = (
+                corrected_cost_breakdown(
+                    energy_kwh=energy_kwh,
+                    price_per_kwh=decision.price_entry["price_per_kwh"],
+                    power_source_grid_pct=d["power_source_grid_pct"],
+                    power_source_pv_pct=d["power_source_pv_pct"],
+                    power_source_bat_pct=d["power_source_bat_pct"],
+                    power_source_cp_pct=d["power_source_cp_pct"],
+                    **split_kwargs,
+                )
+                if decision.price_entry is not None else None
+            )
+            d["cost_corrected_grid"] = breakdown.grid if breakdown else 0.0
+            d["cost_corrected_pv"] = breakdown.pv if breakdown else 0.0
+            d["cost_corrected_bat"] = breakdown.bat if breakdown else 0.0
         sessions.append(d)
     return sessions
 

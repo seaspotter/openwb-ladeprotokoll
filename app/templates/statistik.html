@@ -114,6 +114,7 @@ try {
   <div class="panel">
     <h2 id="cost-chart-heading">Kosten</h2>
     <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
+    <p class="muted" id="cost-breakdown" hidden></p>
   </div>
 
   <div class="panel">
@@ -162,9 +163,11 @@ async function loadVehicleFilter() {
 }
 
 const COST_BASIS_LABELS = { openwb: 'openWB-Wert', corrected: 'Korrigiert' };
+let currentCostBasis = 'corrected';
 
 async function loadCostBasisLabel() {
   const settings = await api('/api/report-settings');
+  currentCostBasis = settings.cost_basis;
   const label = `Kosten (${COST_BASIS_LABELS[settings.cost_basis]})`;
   document.getElementById('stat-cost-label').textContent = label;
   document.getElementById('cost-chart-heading').textContent = label;
@@ -250,22 +253,57 @@ async function loadStatistics() {
     },
   });
 
+  const costBreakdownEl = document.getElementById('cost-breakdown');
   if (chartCost) chartCost.destroy();
-  chartCost = new Chart(document.getElementById('chart-cost'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{ label: 'Kosten', data: periods.map((p) => p.cost), backgroundColor: '#2563eb' }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: {
-        x: { ticks: tickOptions, grid: gridOptions },
-        y: { ticks: tickOptions, grid: gridOptions, title: { display: true, text: '€', color: colors.muted } },
+  if (currentCostBasis === 'corrected') {
+    // Same colors as chart-energy's Netz/PV/Speicher, no "Ladepunkt" bucket
+    // (chargepoint-sourced energy is priced at the battery rate, folded
+    // into cost_bat -- see price_entries.corrected_cost_breakdown) and no
+    // blue, since blue already means "Ladepunkt" in chart-energy's legend.
+    chartCost = new Chart(document.getElementById('chart-cost'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Netz', data: periods.map((p) => p.cost_grid), backgroundColor: '#6b7280' },
+          { label: 'PV', data: periods.map((p) => p.cost_pv), backgroundColor: '#16a34a' },
+          { label: 'Speicher', data: periods.map((p) => p.cost_bat), backgroundColor: '#f59e0b' },
+        ],
       },
-      plugins: { legend: { display: false } },
-    },
-  });
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks: tickOptions, grid: gridOptions },
+          y: { stacked: true, ticks: tickOptions, grid: gridOptions, title: { display: true, text: '€', color: colors.muted } },
+        },
+        plugins: { legend: legendOptions },
+      },
+    });
+    const totalGrid = periods.reduce((a, p) => a + p.cost_grid, 0);
+    const totalPvCost = periods.reduce((a, p) => a + p.cost_pv, 0);
+    const totalBatCost = periods.reduce((a, p) => a + p.cost_bat, 0);
+    costBreakdownEl.hidden = false;
+    costBreakdownEl.textContent =
+      `Netz: ${fmtNum(totalGrid, 2, ' €')} · PV: ${fmtNum(totalPvCost, 2, ' €')} · ` +
+      `Speicher: ${fmtNum(totalBatCost, 2, ' €')}`;
+  } else {
+    chartCost = new Chart(document.getElementById('chart-cost'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Kosten', data: periods.map((p) => p.cost), backgroundColor: '#2563eb' }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { ticks: tickOptions, grid: gridOptions },
+          y: { ticks: tickOptions, grid: gridOptions, title: { display: true, text: '€', color: colors.muted } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+    costBreakdownEl.hidden = true;
+  }
 }
 
 document.getElementById('filter-form').addEventListener('submit', (ev) => {

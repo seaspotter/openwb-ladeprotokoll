@@ -98,7 +98,18 @@ def match_price_entry(
     return max(candidates, key=lambda e: (_specificity(e), e["created_at"]))
 
 
-def corrected_cost(
+@dataclass
+class CostBreakdown:
+    grid: float
+    pv: float
+    bat: float
+
+    @property
+    def total(self) -> float:
+        return self.grid + self.pv + self.bat
+
+
+def corrected_cost_breakdown(
     *,
     energy_kwh: float | None,
     price_per_kwh: float,
@@ -108,7 +119,7 @@ def corrected_cost(
     power_source_cp_pct: float | None = None,
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
-) -> float | None:
+) -> CostBreakdown | None:
     """Prices a session's actual energy mix rather than one flat rate over
     the whole session: the grid-sourced share uses `price_per_kwh` (the
     matched/overridden price_entries row's own rate -- a utility tariff
@@ -119,8 +130,10 @@ def corrected_cost(
     doesn't vary by source/vehicle/date the way price_entries does. The
     chargepoint's own share (power_source.cp -- rare, effectively always 0
     in every real record seen so far, see chargelog_parse.py) is folded
-    into the battery rate: it represents energy from local storage rather
-    than the grid, same as power_source.bat.
+    into the battery bucket: it represents energy from local storage
+    rather than the grid, same as power_source.bat. Returns the three
+    components separately (statistics.py's per-source Kosten chart wants
+    them individually, not just the sum `corrected_cost` returns).
 
     When every power_source_*_pct is None (a session predating this
     feature, or a data source that never populates the split), the whole
@@ -133,11 +146,37 @@ def corrected_cost(
     grid_pct = power_source_grid_pct if power_source_grid_pct is not None else 100.0
     pv_pct = power_source_pv_pct or 0.0
     bat_pct = (power_source_bat_pct or 0.0) + (power_source_cp_pct or 0.0)
-    return energy_kwh * (
-        (grid_pct / 100) * price_per_kwh
-        + (pv_pct / 100) * pv_price_per_kwh
-        + (bat_pct / 100) * bat_price_per_kwh
+    return CostBreakdown(
+        grid=energy_kwh * (grid_pct / 100) * price_per_kwh,
+        pv=energy_kwh * (pv_pct / 100) * pv_price_per_kwh,
+        bat=energy_kwh * (bat_pct / 100) * bat_price_per_kwh,
     )
+
+
+def corrected_cost(
+    *,
+    energy_kwh: float | None,
+    price_per_kwh: float,
+    power_source_grid_pct: float | None = None,
+    power_source_pv_pct: float | None = None,
+    power_source_bat_pct: float | None = None,
+    power_source_cp_pct: float | None = None,
+    pv_price_per_kwh: float = 0.0,
+    bat_price_per_kwh: float = 0.0,
+) -> float | None:
+    """The single-figure sum of `corrected_cost_breakdown` -- see that
+    function for the actual per-source pricing logic."""
+    breakdown = corrected_cost_breakdown(
+        energy_kwh=energy_kwh,
+        price_per_kwh=price_per_kwh,
+        power_source_grid_pct=power_source_grid_pct,
+        power_source_pv_pct=power_source_pv_pct,
+        power_source_bat_pct=power_source_bat_pct,
+        power_source_cp_pct=power_source_cp_pct,
+        pv_price_per_kwh=pv_price_per_kwh,
+        bat_price_per_kwh=bat_price_per_kwh,
+    )
+    return breakdown.total if breakdown is not None else None
 
 
 def decide_price(

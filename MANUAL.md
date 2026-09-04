@@ -217,7 +217,12 @@ kam — monatlich oder jährlich zusammengefasst.
   PV-Preis/Batterie-Preis einfließen (siehe "Preise" oben) — die
   korrigierten Kosten hier können sich daher von den korrigierten Kosten
   in Übersicht/Bericht erstellen/PDF unterscheiden, wenn PV-Preis oder
-  Batterie-Preis gesetzt sind.
+  Batterie-Preis gesetzt sind. In diesem Fall ist das Diagramm ebenfalls
+  gestapelt (Netz/PV/Speicher, dieselben Farben wie im Energiequellen-
+  Diagramm darüber), darunter steht eine Zeile mit den drei Gesamtsummen
+  über den angezeigten Zeitraum (z. B. "Netz: 6,45 € · PV: 1,90 € ·
+  Speicher: 0,67 €"). Bei "openWB-Wert" bleibt es bei einem einzigen
+  Balken, da openWBs eigener Wert nicht nach Quelle aufgeschlüsselt ist.
 - **Nach Fahrzeug** — Tabelle mit Ladevorgängen, Energie, Netz-/PV-/
   Speicher-Anteil (je in %) und Kosten je Fahrzeug (nicht nach Zeitraum),
   absteigend nach Energie sortiert — zum Vergleichen mehrerer Fahrzeuge

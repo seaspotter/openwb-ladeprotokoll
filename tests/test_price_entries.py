@@ -5,6 +5,7 @@ import pytest
 from app.price_entries import (
     DELTA_FLAG_THRESHOLD,
     corrected_cost,
+    corrected_cost_breakdown,
     decide_price,
     match_and_decide,
     match_price_entry,
@@ -160,6 +161,31 @@ def test_corrected_cost_chargepoint_share_priced_at_battery_rate():
         pv_price_per_kwh=0.05, bat_price_per_kwh=0.20,
     )
     assert result == pytest.approx(2.0)
+
+
+def test_corrected_cost_breakdown_components_and_total():
+    breakdown = corrected_cost_breakdown(
+        energy_kwh=10.0, price_per_kwh=0.30,
+        power_source_grid_pct=60, power_source_pv_pct=30, power_source_bat_pct=10,
+        pv_price_per_kwh=0.10, bat_price_per_kwh=0.15,
+    )
+    assert breakdown.grid == pytest.approx(1.8)
+    assert breakdown.pv == pytest.approx(0.3)
+    assert breakdown.bat == pytest.approx(0.15)
+    assert breakdown.total == pytest.approx(2.25)
+
+
+def test_corrected_cost_breakdown_none_energy_returns_none():
+    assert corrected_cost_breakdown(energy_kwh=None, price_per_kwh=0.30) is None
+
+
+def test_corrected_cost_matches_breakdown_total():
+    kwargs = dict(
+        energy_kwh=10.0, price_per_kwh=0.30,
+        power_source_grid_pct=60, power_source_pv_pct=30, power_source_bat_pct=10,
+        pv_price_per_kwh=0.10, bat_price_per_kwh=0.15,
+    )
+    assert corrected_cost(**kwargs) == pytest.approx(corrected_cost_breakdown(**kwargs).total)
 
 
 def test_decide_price_no_entry_falls_back_to_openwb_cost():

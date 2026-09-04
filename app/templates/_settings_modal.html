@@ -54,10 +54,10 @@
   .modal-body th { color: var(--muted); font-weight: 500; }
   .modal-body .status-ok { color: var(--ok); }
   .modal-body .status-error { color: var(--error); }
-  .modal-body form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .modal-body form.inline { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; }
   .modal-body .add-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   .modal-body input[type=text], .modal-body input[type=number], .modal-body input[type=date],
-  .modal-body input[type=month], .modal-body select {
+  .modal-body input[type=month], .modal-body input[type=time], .modal-body select {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 8px; font-size: 13px;
   }
@@ -75,7 +75,19 @@
   }
   .modal-body .muted { color: var(--muted); font-size: 12px; }
   .modal-body .columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; margin-bottom: 10px; }
-  .modal-body label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  /* Every <label> in the modal -- not just checkbox ones -- gets the same
+     13px/inline-flex/gap treatment, so "Kosten-Spalte zeigt:", "PV-Preis
+     (€/kWh):" etc. sit at the same size as everything around them instead
+     of falling back to the body's larger default font (a real visual
+     inconsistency caught from a user screenshot: labels without a class
+     rendered noticeably bigger than the buttons/inputs/table text next to
+     them). */
+  .modal-body label {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+  }
+  .modal-body input[type=checkbox] {
+    width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; margin: 0;
+  }
   .header-icon-btn {
     background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
     width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;

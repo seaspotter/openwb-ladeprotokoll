@@ -20,6 +20,20 @@ what that means in practice for this project.
   settings. A session with no recorded energy-source split (predating
   this feature) still defaults to 100% grid within the split, matching
   the flat-rate result exactly.
+- Statistik's Kosten chart, when showing the corrected basis, is now
+  stacked by source (Netz/PV/Speicher, same colors as the Energiequellen
+  chart above it) instead of one flat bar, with a totals line underneath
+  summing each source across the shown period -- fixes a color collision
+  where the flat bar reused the same blue the Energiequellen chart's
+  legend uses for "Ladepunkt". Falls back to the previous single-bar
+  chart when showing openWB's own cost, which isn't priced per source.
+- Every `<label>` in the Einstellungen dialog (not just checkbox labels)
+  now renders at a consistent size -- several plain labels ("Kosten-
+  Spalte zeigt:", "PV-Preis (€/kWh):") previously fell back to a larger
+  default font next to 13px inputs/buttons/table text. Checkboxes get a
+  consistent accent-colored size, and the auto-fetch time input gets the
+  same border/background styling as every other input in the dialog
+  (previously unstyled).
 - MCP server at `/mcp` (`app/mcp_server.py`, `FastMCP`, Streamable HTTP
   transport, same pattern as the sibling `openwb-logger` project):
   `search_sessions` (source/vehicle/chargepoint/date filters, same price-

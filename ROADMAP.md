@@ -157,6 +157,16 @@ open an issue or just start working if something here matters to you.
       the user pointed out that a single flat corrected rate can't
       reflect openWB's own per-source pricing once it's configured
       differently there.
+- [x] Statistik's Kosten chart stacks Netz-/PV-/Speicher-Kosten (matching
+      the Energiequellen chart's colors, dropping the reused-blue color
+      collision with its "Ladepunkt" series) when showing the corrected
+      basis, plus a totals line underneath — same-day follow-up to the
+      per-source split above, so the chart actually shows the three
+      prices it now computes instead of one blended bar.
+- [x] Einstellungen dialog: unified font size across every `<label>` (not
+      just checkbox ones), consistent checkbox styling, and the
+      auto-fetch time input styled to match every other input — fixed a
+      real visual inconsistency from a user screenshot.
 
 ## Next
 

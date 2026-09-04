@@ -18,6 +18,16 @@ report_build.py uses (cost_basis="openwb"|"corrected", never both side by
 side): callers pass sessions already carrying cost_openwb/cost_used from
 _query_sessions, and both aggregate functions pick whichever cost_basis
 says.
+
+cost_grid/cost_pv/cost_bat are the same total split by source instead of
+summed into one figure -- for the /statistik Kosten chart's stacked bars.
+Only meaningful (and only accumulated) when cost_basis="corrected": a
+session only carries cost_corrected_grid/_pv/_bat when web.py's
+_query_sessions was called with split_pv_bat=True (see that function's
+docstring -- currently only /api/statistics does), and openWB's own cost
+was never priced per source to begin with, so there's nothing to split
+when cost_basis="openwb". cost_grid+cost_pv+cost_bat always equals cost
+exactly when cost_basis="corrected" (all three are 0.0 otherwise).
 """
 from __future__ import annotations
 
@@ -37,6 +47,9 @@ class PeriodStats:
     session_count: int
     energy_kwh: float
     cost: float
+    cost_grid: float
+    cost_pv: float
+    cost_bat: float
     energy_grid_kwh: float
     energy_pv_kwh: float
     energy_bat_kwh: float
@@ -49,6 +62,9 @@ class VehicleStats:
     session_count: int
     energy_kwh: float
     cost: float
+    cost_grid: float
+    cost_pv: float
+    cost_bat: float
     energy_grid_kwh: float
     energy_pv_kwh: float
     energy_bat_kwh: float
@@ -71,6 +87,7 @@ def _resolve_cost(session: dict, cost_basis: str) -> float:
 def _empty_bucket() -> dict:
     return {
         "session_count": 0, "energy_kwh": 0.0, "cost": 0.0,
+        "cost_grid": 0.0, "cost_pv": 0.0, "cost_bat": 0.0,
         "energy_grid_kwh": 0.0, "energy_pv_kwh": 0.0,
         "energy_bat_kwh": 0.0, "energy_cp_kwh": 0.0,
     }
@@ -81,6 +98,10 @@ def _accumulate(bucket: dict, session: dict, cost_basis: str) -> None:
     bucket["session_count"] += 1
     bucket["energy_kwh"] += energy
     bucket["cost"] += _resolve_cost(session, cost_basis)
+    if cost_basis == "corrected":
+        bucket["cost_grid"] += session.get("cost_corrected_grid") or 0.0
+        bucket["cost_pv"] += session.get("cost_corrected_pv") or 0.0
+        bucket["cost_bat"] += session.get("cost_corrected_bat") or 0.0
     for pct_key, energy_key in (
         ("power_source_grid_pct", "energy_grid_kwh"),
         ("power_source_pv_pct", "energy_pv_kwh"),

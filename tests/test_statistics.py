@@ -6,6 +6,7 @@ from app.statistics import PeriodStats, StatisticsError, VehicleStats, aggregate
 def _session(
     time_begin, energy_kwh=10.0, cost_openwb=3.0, cost_used=3.0,
     grid=None, pv=None, bat=None, cp=None, vehicle_name="VW ID3",
+    cost_corrected_grid=None, cost_corrected_pv=None, cost_corrected_bat=None,
 ):
     return {
         "time_begin": time_begin,
@@ -17,6 +18,9 @@ def _session(
         "power_source_bat_pct": bat,
         "power_source_cp_pct": cp,
         "vehicle_name": vehicle_name,
+        "cost_corrected_grid": cost_corrected_grid,
+        "cost_corrected_pv": cost_corrected_pv,
+        "cost_corrected_bat": cost_corrected_bat,
     }
 
 
@@ -30,6 +34,7 @@ def test_aggregate_single_session_month():
     assert result == [
         PeriodStats(
             period="2026-08", session_count=1, energy_kwh=10.0, cost=3.5,
+            cost_grid=0.0, cost_pv=0.0, cost_bat=0.0,
             energy_grid_kwh=0.0, energy_pv_kwh=0.0, energy_bat_kwh=0.0, energy_cp_kwh=0.0,
         )
     ]
@@ -160,5 +165,35 @@ def test_vehicle_stats_energy_source_split():
     result = aggregate_by_vehicle(sessions)
     assert result[0] == VehicleStats(
         vehicle_name="VW ID3", session_count=1, energy_kwh=10.0, cost=3.0,
+        cost_grid=0.0, cost_pv=0.0, cost_bat=0.0,
         energy_grid_kwh=2.0, energy_pv_kwh=8.0, energy_bat_kwh=0.0, energy_cp_kwh=0.0,
     )
+
+
+def test_aggregate_accumulates_cost_breakdown_when_corrected():
+    sessions = [
+        _session(
+            "2026-08-01T10:00:00+00:00", cost_used=2.25,
+            cost_corrected_grid=1.8, cost_corrected_pv=0.3, cost_corrected_bat=0.15,
+        ),
+    ]
+    result = aggregate(sessions, cost_basis="corrected")
+    p = result[0]
+    assert p.cost_grid == pytest.approx(1.8)
+    assert p.cost_pv == pytest.approx(0.3)
+    assert p.cost_bat == pytest.approx(0.15)
+    assert p.cost_grid + p.cost_pv + p.cost_bat == pytest.approx(p.cost)
+
+
+def test_aggregate_cost_breakdown_zero_when_openwb_basis():
+    sessions = [
+        _session(
+            "2026-08-01T10:00:00+00:00", cost_openwb=3.0,
+            cost_corrected_grid=1.8, cost_corrected_pv=0.3, cost_corrected_bat=0.15,
+        ),
+    ]
+    result = aggregate(sessions, cost_basis="openwb")
+    p = result[0]
+    assert p.cost_grid == 0.0
+    assert p.cost_pv == 0.0
+    assert p.cost_bat == 0.0
