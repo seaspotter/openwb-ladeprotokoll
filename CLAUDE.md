@@ -421,7 +421,20 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   stacked one for the grid/PV/battery/chargepoint kWh split, a plain one
   for cost — and a "Nach Fahrzeug" table (from the same response's
   `by_vehicle`) for comparing vehicles against each other rather than
-  only against time. Chart colors (`chartColors()`) are read from the
+  only against time, with per-vehicle Netz/PV/Speicher percentage columns
+  (each `energy_*_kwh / energy_kwh`, client-side, mirroring the stacked
+  chart's split but for one vehicle instead of one period) — the table
+  used to have a single combined "PV-Anteil" (`(pv+bat)/energy`) column,
+  split into three per user feedback wanting grid/PV/battery visible
+  separately, not just self-consumption. Since `cost`/`Kosten` here (the
+  stat card, the chart heading, and the table's own column) is driven by
+  `report_settings`'s app-wide `cost_basis` default (see `web.py`'s
+  `api_statistics`) rather than a per-request choice like
+  `report_review.html`'s generation flow has, all three labels are
+  suffixed with which basis is active (`loadCostBasisLabel()`, fetched
+  once via `GET /api/report-settings` at page load) — added after a user
+  asked "which Kosten are these, real or corrected?" with nothing on the
+  page actually saying so. Chart colors (`chartColors()`) are read from the
   page's own CSS custom properties (`--text`/`--muted`/`--border`) at
   chart-creation time so both themes render correctly — picked once per
   `loadStatistics()` call, not live-updated on a theme toggle mid-session
@@ -434,13 +447,20 @@ wrapper puts the same inline lightning-bolt SVG (identical markup to the
 favicon and `report_pdf.html`'s header logo — this app's own mark, not
 `openwb-logger`'s icon) to the left of the `<h1>` on every page — this was
 missing for a while (only the favicon/PDF had it, the actual page headers
-never did) until a user screenshot caught it; a secondary "back" link on
-the left where relevant (`← Übersicht`; `index.html` has none, it *is*
-"back"), the gear/theme icon pair on the right, and (`index.html` only)
-"Jetzt abrufen", "Statistik", and "Bericht erstellen →" — all plain flat
-buttons like everything else, no accent-filled "primary" style (see
-`_settings_modal.html` above); `report_review.html`'s own in-page "Bericht
-erzeugen" button is styled the same way.
+never did) until a user screenshot caught it. Everything else in the
+header — a secondary "back" link where relevant (`← Übersicht`;
+`index.html` has none, it *is* "back"), "Statistik", (`index.html` only)
+"Jetzt abrufen" and "Bericht erstellen →", and the gear/theme icon pair —
+sits together on the **right**, pushed there by `.nav-spacer` (`margin-
+left: auto`) placed right after `.brand`; `report_review.html` and
+`statistik.html` once had their back-link/`Statistik` markup positioned
+*before* the spacer, which left it stranded next to the title instead of
+grouped with the icons on the right (a real shipped bug, caught from a
+screenshot) — if adding a new header link, put it inside `.header-actions`
+alongside the existing ones, not before the spacer. All plain flat
+buttons, no accent-filled "primary" style (see `_settings_modal.html`
+above); `report_review.html`'s own in-page "Bericht erzeugen" button is
+styled the same way.
 - An MCP endpoint at `/mcp` — see `app/mcp_server.py` above.
 
 Storage is Postgres only. Reports, once generated, are immutable — the

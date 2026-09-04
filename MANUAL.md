@@ -198,10 +198,14 @@ kam — monatlich oder jährlich zusammengefasst.
   was der Realität eher entspricht als eine einfache Durchschnittsbildung.
 - **Kosten** — Balkendiagramm pro Zeitraum, zeigt dieselbe "Kosten"-Größe
   wie überall sonst in der Anwendung (openWB-Wert oder korrigiert, je
-  nach Berichts-Einstellungen → Kosten-Spalte zeigt).
-- **Nach Fahrzeug** — Tabelle mit Ladevorgängen, Energie, PV-Anteil und
-  Kosten je Fahrzeug (nicht nach Zeitraum), absteigend nach Energie
-  sortiert — zum Vergleichen mehrerer Fahrzeuge untereinander.
+  nach Berichts-Einstellungen → Kosten-Spalte zeigt) — welche der beiden
+  gerade aktiv ist, steht direkt in der Überschrift ("Kosten (openWB-Wert)"
+  bzw. "Kosten (Korrigiert)"), ebenso in der Summe-Kachel und der
+  Nach-Fahrzeug-Spalte.
+- **Nach Fahrzeug** — Tabelle mit Ladevorgängen, Energie, Netz-/PV-/
+  Speicher-Anteil (je in %) und Kosten je Fahrzeug (nicht nach Zeitraum),
+  absteigend nach Energie sortiert — zum Vergleichen mehrerer Fahrzeuge
+  untereinander.
 
 ## Self-Update
 

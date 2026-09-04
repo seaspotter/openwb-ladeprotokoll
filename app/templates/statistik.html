@@ -100,7 +100,7 @@ try {
     <div class="totals-grid">
       <div class="stat"><div class="label">Ladevorgänge</div><div class="value" id="stat-sessions">–</div></div>
       <div class="stat"><div class="label">Energie</div><div class="value" id="stat-energy">–</div></div>
-      <div class="stat"><div class="label">Kosten</div><div class="value" id="stat-cost">–</div></div>
+      <div class="stat"><div class="label" id="stat-cost-label">Kosten</div><div class="value" id="stat-cost">–</div></div>
       <div class="stat"><div class="label">PV-Eigenverbrauch</div><div class="value" id="stat-pv-share">–</div></div>
     </div>
   </div>
@@ -112,7 +112,7 @@ try {
   </div>
 
   <div class="panel">
-    <h2>Kosten</h2>
+    <h2 id="cost-chart-heading">Kosten</h2>
     <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
   </div>
 
@@ -122,8 +122,9 @@ try {
       <thead>
         <tr>
           <th>Fahrzeug</th><th class="numeric">Ladevorgänge</th>
-          <th class="numeric">Energie</th><th class="numeric">PV-Anteil</th>
-          <th class="numeric">Kosten</th>
+          <th class="numeric">Energie</th><th class="numeric">Netz</th>
+          <th class="numeric">PV</th><th class="numeric">Speicher</th>
+          <th class="numeric" id="vehicle-cost-header">Kosten</th>
         </tr>
       </thead>
       <tbody id="vehicle-body"></tbody>
@@ -158,6 +159,16 @@ async function loadVehicleFilter() {
     opt.textContent = v.vehicle_name;
     select.appendChild(opt);
   }
+}
+
+const COST_BASIS_LABELS = { openwb: 'openWB-Wert', corrected: 'Korrigiert' };
+
+async function loadCostBasisLabel() {
+  const settings = await api('/api/report-settings');
+  const label = `Kosten (${COST_BASIS_LABELS[settings.cost_basis]})`;
+  document.getElementById('stat-cost-label').textContent = label;
+  document.getElementById('cost-chart-heading').textContent = label;
+  document.getElementById('vehicle-cost-header').textContent = label;
 }
 
 function chartColors() {
@@ -197,15 +208,15 @@ async function loadStatistics() {
   const vehicleBody = document.getElementById('vehicle-body');
   vehicleBody.innerHTML = '';
   for (const v of by_vehicle) {
-    const pvShare = v.energy_kwh > 0
-      ? fmtNum(((v.energy_pv_kwh + v.energy_bat_kwh) / v.energy_kwh) * 100, 0, ' %')
-      : '–';
+    const share = (kwh) => v.energy_kwh > 0 ? fmtNum((kwh / v.energy_kwh) * 100, 0, ' %') : '–';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${v.vehicle_name}</td>
       <td class="numeric">${v.session_count}</td>
       <td class="numeric">${fmtNum(v.energy_kwh, 1, ' kWh')}</td>
-      <td class="numeric">${pvShare}</td>
+      <td class="numeric">${share(v.energy_grid_kwh)}</td>
+      <td class="numeric">${share(v.energy_pv_kwh)}</td>
+      <td class="numeric">${share(v.energy_bat_kwh)}</td>
       <td class="numeric">${fmtNum(v.cost, 2, ' €')}</td>
     `;
     vehicleBody.appendChild(tr);
@@ -263,8 +274,7 @@ document.getElementById('filter-form').addEventListener('submit', (ev) => {
 });
 
 (async function init() {
-  await loadSourceFilter();
-  await loadVehicleFilter();
+  await Promise.all([loadSourceFilter(), loadVehicleFilter(), loadCostBasisLabel()]);
   await loadStatistics();
 })();
 </script>

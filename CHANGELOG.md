@@ -41,6 +41,13 @@ what that means in practice for this project.
   column actually shows (the price-corrected/used cost), matching the
   first column's plain "real"-cost framing. Display-only; the underlying
   `cost_openwb`/`cost_used` field names are unchanged.
+- `/statistik`'s "Kosten" stat card, chart heading, and "Nach Fahrzeug"
+  column now all say which cost basis they're summing (e.g. "Kosten
+  (Korrigiert)") -- previously the page never said whether it was showing
+  openWB's own cost or the corrected one. "Nach Fahrzeug"'s single
+  combined "PV-Anteil" column split into separate Netz/PV/Speicher
+  percentage columns, so the grid/PV/battery mix is visible per vehicle,
+  not just self-consumption as one number.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI
