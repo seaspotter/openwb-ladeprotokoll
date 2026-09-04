@@ -108,8 +108,8 @@ try {
         <tr>
           <th><input type="checkbox" id="select-all" checked></th>
           <th>Beginn</th><th>Fahrzeug</th><th>Ladepunkt</th>
-          <th class="numeric">Energie</th><th class="numeric">Kosten (openWB)</th>
-          <th>Preis</th><th class="numeric">Kosten (verwendet)</th>
+          <th class="numeric">Energie</th><th class="numeric">Kosten (real)</th>
+          <th>Preis</th><th class="numeric">Kosten (korrigiert)</th>
         </tr>
       </thead>
       <tbody id="sessions-body"></tbody>
@@ -271,7 +271,7 @@ function recomputeTotals() {
     <div class="stat"><div class="label">Energie</div><div class="value">${fmtNum(energy, 2, ' kWh')}</div></div>
     <div class="stat"><div class="label">Entladene Energie</div><div class="value">${fmtNum(discharged, 2, ' kWh')}</div></div>
     <div class="stat"><div class="label">Reichweite</div><div class="value">${fmtNum(range, 0, ' km')}</div></div>
-    <div class="stat"><div class="label">Kosten (openWB)</div><div class="value">${fmtNum(costOpenwb, 2, ' €')}</div></div>
+    <div class="stat"><div class="label">Kosten (real)</div><div class="value">${fmtNum(costOpenwb, 2, ' €')}</div></div>
     <div class="stat"><div class="label">Kosten (korrigiert)</div><div class="value">${fmtNum(costUsed, 2, ' €')}</div></div>
   `;
 }

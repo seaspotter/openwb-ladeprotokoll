@@ -24,7 +24,7 @@ Fahrzeug, Ladepunkt und Zeitraum. Fahrzeug und Ladepunkt sind Auswahllisten
 die gewählte Quelle) statt Freitextfeldern — falsche Schreibweisen liefern
 so keine leeren Ergebnisse.
 
-Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
+Neben "Kosten (real)" steht der zum jeweiligen Ladevorgang passende
 Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
 Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
 ab, sind beide Spalten rot hervorgehoben. Diese Hervorhebung dient nur der
@@ -144,7 +144,7 @@ Nicht vergessen: nach Änderungen unten **Speichern** klicken.
    Preis ("Automatisch (Anbieter)" oder "Automatisch (kein Preis)"); über
    das Dropdown lässt sich das für diesen einen Ladevorgang übersteuern:
    ein bestimmter Preis-Eintrag, oder "openWB-Wert verwenden" (keine
-   Korrektur für diese Zeile). Die "Kosten (verwendet)"-Spalte und die
+   Korrektur für diese Zeile). Die "Kosten (korrigiert)"-Spalte und die
    Summe darunter aktualisieren sich sofort.
 3. **Vorschau** — zeigt das Dokument in der Seite, ohne etwas zu
    speichern; beliebig oft wiederholbar.

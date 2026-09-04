@@ -34,6 +34,12 @@ what that means in practice for this project.
   a change to what that default means. The generated PDF documents which
   basis it used as its own "Kostenbasis" meta line, and "Bisherige
   Berichte" shows the same per report.
+- The Übersicht and Bericht-erstellen session tables' cost columns
+  renamed: "Kosten (openWB)" -> "Kosten (real)", "Kosten (verwendet)" ->
+  "Kosten (korrigiert)" -- clearer than "verwendet" for what the second
+  column actually shows (the price-corrected/used cost), matching the
+  first column's plain "real"-cost framing. Display-only; the underlying
+  `cost_openwb`/`cost_used` field names are unchanged.
 
 ### Changed
 - Dropped the standalone CSV-export roadmap item -- openWB's own UI
