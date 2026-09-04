@@ -147,6 +147,25 @@ function onSourcesChanged(sources) {
     select.appendChild(opt);
   }
   select.value = current;
+  updateLastFetchDisplay(sources);
+}
+
+// Shows the most recent last_fetch_at across all sources (not just the
+// ones touched by a click of "Jetzt abrufen") -- a persistent freshness
+// indicator, more useful than a transient "N Quelle(n) erfolgreich
+// abgerufen" toast that says nothing once the page has been open a while.
+function updateLastFetchDisplay(sources) {
+  const resultEl = document.getElementById('fetch-result');
+  const timestamps = sources.map((s) => s.last_fetch_at).filter(Boolean);
+  if (timestamps.length === 0) {
+    resultEl.textContent = 'Noch kein Abruf erfolgt.';
+    return;
+  }
+  const latest = timestamps.reduce((a, b) => (a > b ? a : b));
+  const failed = sources.filter((s) => s.enabled && s.last_fetch_status && s.last_fetch_status !== 'ok').length;
+  resultEl.textContent = failed === 0
+    ? `Letzter Abruf: ${fmtDateTime(latest)}`
+    : `Letzter Abruf: ${fmtDateTime(latest)} (${failed} Quelle(n) zuletzt fehlgeschlagen -- Details unter "⚙️ Einstellungen")`;
 }
 
 async function loadVehicleAndChargepointFilters() {
@@ -221,21 +240,17 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
   }
   btn.disabled = true;
   resultEl.textContent = 'Abruf läuft …';
-  let ok = 0;
-  let failed = 0;
   for (const s of enabled) {
     try {
       await api(`/api/sources/${s.id}/fetch-now`, { method: 'POST' });
-      ok++;
     } catch (err) {
-      failed++;
+      // per-source failure already lands in last_fetch_status, reflected
+      // in updateLastFetchDisplay() below once sources are reloaded
     }
   }
-  resultEl.textContent = failed === 0
-    ? `${ok} Quelle(n) erfolgreich abgerufen.`
-    : `${ok} Quelle(n) erfolgreich, ${failed} fehlgeschlagen -- Details unter "⚙️ Einstellungen".`;
   btn.disabled = false;
-  onSourcesChanged(sources);
+  const { sources: freshSources } = await api('/api/sources');
+  onSourcesChanged(freshSources);
   await loadVehicleAndChargepointFilters();
   await loadSessions();
 });

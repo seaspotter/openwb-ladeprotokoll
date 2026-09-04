@@ -195,6 +195,18 @@ _SCHEMA_STATEMENTS = [
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     """,
+    # Single-row app-wide settings unrelated to report generation (see
+    # report_settings.py for that) -- currently whether the daily
+    # background fetch scheduler runs at all, and at what wall-clock time,
+    # see app_settings.py.
+    """
+    CREATE TABLE IF NOT EXISTS app_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        auto_fetch_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        auto_fetch_time TEXT NOT NULL DEFAULT '00:05',
+        CHECK (id = 1)
+    );
+    """,
 ]
 
 

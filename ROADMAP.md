@@ -102,6 +102,15 @@ open an issue or just start working if something here matters to you.
       matching header/button padding and font-size) and switched the
       settings/theme header icons from color emoji to the same plain SVG/
       glyph markup openwb-logger and knxpilot use.
+- [x] Fixed a real double-scrollbar bug in the settings `<dialog>` (it had
+      a `max-height` but no `overflow: hidden`, and `.modal-body`'s own
+      scroll area was a hardcoded height guess that could fall short) —
+      restructured as a flex column so only `.modal-body` ever scrolls.
+- [x] Automatic daily fetch is now configurable (on/off + wall-clock time,
+      default `00:05`, `app_settings` table/`app_settings.py`) instead of
+      a fixed 24h-from-startup interval; the overview page now shows a
+      persistent "Letzter Abruf" freshness indicator instead of a one-off
+      post-click success toast.
 
 ## Next
 
@@ -114,3 +123,19 @@ open an issue or just start working if something here matters to you.
       wasn't requested and adds surface area before the core flow is even
       done.
 - [ ] Multi-currency support, if this is ever useful outside Germany/EUR.
+- [ ] Dynamische Stromtarife (variable/spot-price electricity tariffs) —
+      `price_entries.py`'s correction model is currently a flat €/kWh over
+      a validity date range, which doesn't fit a tariff that varies by
+      hour. Needs research before design: does openWB's own `data.costs`
+      per session already reflect the correct dynamic-tariff cost at charge
+      time (in which case a dynamic-tariff user may just want `cost_basis
+      = "openwb"` and no correction at all), or would this need per-hour
+      price data of its own? Raised by the user (2026-09-04) as a gap, not
+      yet scoped.
+- [ ] Monthly/yearly statistics with a chart — total kWh, total cost, and
+      the PV/grid/battery/chargepoint share (the `power_source_*_pct`
+      columns already exist in `sessions`, unused for anything but display
+      today) aggregated over time, not just per-report totals. Would be a
+      new page, client-side charting (no server-rendered image needed
+      since this isn't part of the immutable PDF). Raised by the user
+      (2026-09-04) alongside the dynamic-tariff idea, not yet scoped.

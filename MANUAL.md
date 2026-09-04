@@ -29,6 +29,13 @@ Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
 Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
 ab, sind beide Spalten rot hervorgehoben.
 
+Unter dem Filter steht "Letzter Abruf: ..." mit Datum/Uhrzeit des
+zuletzt (automatisch oder manuell) erfolgreich abgerufenen Ladeprotokolls
+über alle Quellen hinweg — so lässt sich auf einen Blick erkennen, ob die
+angezeigten Daten aktuell sind, ohne extra unter Einstellungen
+nachzusehen. Ist zuletzt eine Quelle fehlgeschlagen, wird das dort
+ebenfalls vermerkt.
+
 Diese Ansicht ist rein zur Übersicht — die Auswahl für einen Bericht
 passiert unter "Bericht erstellen".
 
@@ -53,10 +60,16 @@ werden soll.
   gespeicherten Ladevorgänge dieser Quelle.
 
 Zusätzlich zu "Jetzt abrufen" läuft im Hintergrund bereits automatisch ein
-täglicher Abruf — einmal beim Start der Anwendung und danach alle 24
-Stunden werden alle aktiven Quellen für den aktuellen Monat neu
-abgefragt, ohne dass dafür etwas eingestellt werden muss (ein Hinweis
-dazu steht auch direkt im Quellen-Bereich).
+täglicher Abruf aller aktiven Quellen für den aktuellen Monat, einmal beim
+Start der Anwendung und danach täglich zur eingestellten Uhrzeit
+(Standard: **00:05**, kurz nach Mitternacht — spät genug, dass der gerade
+zu Ende gegangene Tag vollständig in openWBs eigener Ladeprotokoll-Datei
+angekommen ist, früh genug, dass beim ersten Blick am Morgen schon die
+Daten von gestern da sind). Direkt im Quellen-Bereich lässt sich das
+über die Checkbox "Automatischer Abruf aktiv" komplett ausschalten und
+die Uhrzeit daneben anpassen — beides wird sofort beim Ändern gespeichert,
+ohne separaten "Speichern"-Knopf. Die Uhrzeit bezieht sich auf die
+Zeitzone des Containers, nicht zwingend die des Browsers.
 
 ### Preise
 

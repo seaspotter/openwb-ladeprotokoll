@@ -14,6 +14,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.requests import Request
 
+from .app_settings import AppSettingsError
+from .app_settings import get_settings as get_app_settings
+from .app_settings import update_settings as update_app_settings
 from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
@@ -145,6 +148,21 @@ async def api_delete_source(source_id: int):
     if result == "DELETE 0":
         raise HTTPException(status_code=404, detail="Quelle nicht gefunden")
     return {"ok": True}
+
+
+@router.get("/api/app-settings")
+async def api_get_app_settings():
+    pool = get_pool()
+    return await get_app_settings(pool)
+
+
+@router.put("/api/app-settings")
+async def api_update_app_settings(patch: dict):
+    pool = get_pool()
+    try:
+        return await update_app_settings(pool, patch)
+    except AppSettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _price_row(r) -> dict:
@@ -516,7 +534,9 @@ def _content_disposition(filename: str) -> str:
     filename*=UTF-8'' extended parameter so umlauts in the title (routine in
     German vehicle/provider names) still show up correctly in browsers that
     honor it, without breaking the ones that only read the plain parameter."""
-    ascii_fallback = filename.encode("ascii", "ignore").decode("ascii").strip() or "ladeprotokoll.pdf"
+    ascii_fallback = (
+        filename.encode("ascii", "ignore").decode("ascii").strip() or "ladeprotokoll.pdf"
+    )
     return f'inline; filename="{ascii_fallback}"; filename*=UTF-8\'\'{quote(filename)}'
 
 

@@ -32,11 +32,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/db.py` — asyncpg pool, idempotent schema bootstrap (`CREATE TABLE
   IF NOT EXISTS`, no migration tool). Full schema for `sources`,
   `sessions`, `price_entries`, `reports`, `report_sessions`,
-  `report_settings`, `vehicles` already lives here — see the module for
-  the natural-key and audit-snapshot reasoning inline. `vehicles`
-  (`vehicle_name` PK, `license_plate`) is purely user-entered metadata —
-  openWB's own charge-log JSON has no Kennzeichen field at all — so it's
-  a plain new `CREATE TABLE`, no additive `ALTER` needed.
+  `report_settings`, `vehicles`, `app_settings` already lives here — see
+  the module for the natural-key and audit-snapshot reasoning inline.
+  `vehicles` (`vehicle_name` PK, `license_plate`) is purely user-entered
+  metadata — openWB's own charge-log JSON has no Kennzeichen field at all
+  — so it's a plain new `CREATE TABLE`, no additive `ALTER` needed.
+  `app_settings` is a second single-row settings table alongside
+  `report_settings`, deliberately kept separate since it's unrelated to
+  report generation — see `app_settings.py`.
 - `app/sources.py` — **pure**: `Source` dataclass plus `base_url`
   validation/normalization (bare IP, host:port, or full URL, all
   normalized to `scheme://host[:port]` with no trailing slash). Unit
@@ -70,11 +73,30 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   Single code path for every trigger (manual fetch-now, daily scheduler,
   on-demand backfill); a per-source `asyncio.Lock` stops those racing on
   the same source.
-- `app/scheduler.py` — daily background fetch: refetches the current
-  month for every enabled source, once at startup and then every 24h.
-  Runs as an `asyncio` task started in `main.py`'s lifespan; reuses
-  `fetch_service.fetch_source` (same per-source lock, same upsert), so it
-  can't race a concurrent manual fetch-now/backfill on the same source.
+- `app/scheduler.py` — daily background fetch: refetches the current month
+  for every enabled source, once at startup, then daily at a configurable
+  wall-clock time (`app_settings.auto_fetch_time`, default `00:05`) rather
+  than a fixed 24h-from-startup interval — `_next_run_at`/`_parse_time` are
+  pure and unit tested, computing "seconds until the next occurrence of
+  that HH:MM" fresh each cycle so a changed setting takes effect from the
+  next wake (not instantly, same as the enabled flag below — accepted as
+  simple and consistent rather than adding a way to interrupt an in-
+  progress sleep). Can be disabled entirely via `app_settings
+  .auto_fetch_enabled` (the "Automatischer Abruf aktiv" checkbox in
+  Einstellungen -> Quellen) — the loop keeps running either way, just
+  skipping the fetch (including the startup one) while disabled, so
+  re-enabling doesn't need a restart. Runs as an `asyncio` task started in
+  `main.py`'s lifespan; reuses `fetch_service.fetch_source` (same
+  per-source lock, same upsert), so it can't race a concurrent manual
+  fetch-now/backfill on the same source.
+- `app/app_settings.py` — thin, mirrors `report_settings.py`'s pure
+  `validate()` + upsert-on-first-read pattern for the single-row
+  `app_settings` table (`auto_fetch_enabled`, `auto_fetch_time` as an
+  `"HH:MM"` string, regex-validated). Read by both `web.py`'s `GET/PUT
+  /api/app-settings` and `scheduler.py`'s own loop directly (not via an
+  HTTP call) — kept as its own module specifically because it has two
+  in-process callers, unlike `vehicles`, which only web.py touches and so
+  stayed as inline SQL there.
 - `app/price_entries.py` — **pure**: electricity price correction. A price
   entry is scoped per source (optional) and per vehicle name (optional),
   both nullable as wildcards. `match_price_entry` ranks candidates by
@@ -145,7 +167,10 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   report without needing its own column.
 - `app/web.py` — FastAPI routes for source CRUD, fetch triggers, price
   entry CRUD (including price-entry `notes`), vehicle Kennzeichen CRUD,
-  report-settings, session listing (enriched with each session's matched
+  report-settings, app-settings (`GET/PUT /api/app-settings`, the same raw
+  `patch: dict` + `validate()`-raises-400 pattern as report-settings, not
+  a pydantic model — needed since it's a partial update of two unrelated
+  fields), session listing (enriched with each session's matched
   price decision; filterable by source/vehicle/**chargepoint**/date), and
   report preview/generate/list/pdf/delete. Plain parameterized SQL via
   asyncpg, no ORM. asyncpg returns `NUMERIC` columns as `Decimal`; anything
@@ -190,7 +215,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   month. Sources and price entries are deliberately **not** managed here
   — see `_settings_modal.html` — so this page stays focused on "what got
   fetched", not configuration (a user-feedback-driven split — apply the
-  same split to any new page).
+  same split to any new page). The `#fetch-result` line under the filter
+  panel (`updateLastFetchDisplay()`) shows the most recent `last_fetch_at`
+  across *all* sources, not just a one-off "N Quelle(n) erfolgreich
+  abgerufen" toast from the last button click — a persistent freshness
+  indicator (updated on page load and after "Jetzt abrufen" via a fresh
+  `GET /api/sources`, since the pre-fetch source list used to pick which
+  sources to hit is stale by the time the fetches finish) that also
+  surfaces any source whose last scheduled/manual fetch failed.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
@@ -234,8 +266,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   add-forms carry that class) otherwise wins the specificity fight against
   the browser's default `[hidden]` rule and the form stays visible
   regardless of the `hidden` attribute; this was a real shipped bug,
-  caught from a screenshot showing the form always open. Price entries
-  have a `notes` field here (form + table column) — an unlabeled
+  caught from a screenshot showing the form always open. The Quellen panel
+  also has the "Automatischer Abruf aktiv" checkbox + a `<input
+  type="time">` (`loadAppSettings()`, `GET/PUT /api/app-settings`) right
+  where the old static explanatory text about the background scheduler
+  used to sit — both save instantly on `change` (no separate "Speichern"
+  button; a native time input's `change` event only fires once a value is
+  committed, not per keystroke, so this doesn't spam the API). Price
+  entries have a `notes` field here (form + table column) — an unlabeled
   provider+date-range row is meaningless months later. The "Fahrzeuge"
   panel (`loadVehicles()`, `GET /api/vehicles`, `PUT
   /api/vehicles/{name}`) lists every vehicle name ever seen with an

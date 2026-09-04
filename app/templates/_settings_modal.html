@@ -99,7 +99,13 @@
         <button type="submit">Hinzufügen</button>
       </form>
       <p class="muted" id="add-source-error"></p>
-      <p class="muted">Automatischer Abruf läuft im Hintergrund alle 24 Stunden für alle aktiven Quellen.</p>
+      <div class="inline" style="margin-top: 6px;">
+        <label class="check">
+          <input type="checkbox" id="auto-fetch-enabled"> Automatischer Abruf aktiv
+        </label>
+        <label>um <input type="time" id="auto-fetch-time" style="width: 90px;"></label>
+      </div>
+      <p class="muted">Läuft täglich zur eingestellten Uhrzeit (Zeitzone des Containers) für alle aktiven Quellen.</p>
     </div>
 
     <div class="panel">
@@ -260,6 +266,41 @@ async function loadPrices() {
     body.appendChild(tr);
   }
 }
+
+async function loadAppSettings() {
+  const settings = await api('/api/app-settings');
+  document.getElementById('auto-fetch-enabled').checked = settings.auto_fetch_enabled;
+  const timeInput = document.getElementById('auto-fetch-time');
+  timeInput.value = settings.auto_fetch_time;
+  timeInput.dataset.previous = settings.auto_fetch_time;
+}
+
+async function saveAppSetting(patch, revert) {
+  try {
+    await api('/api/app-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  } catch (err) {
+    revert();
+    alert('Speichern fehlgeschlagen: ' + err.message);
+  }
+}
+
+document.getElementById('auto-fetch-enabled').addEventListener('change', (ev) => {
+  const checkbox = ev.target;
+  const desired = checkbox.checked;
+  saveAppSetting({ auto_fetch_enabled: desired }, () => { checkbox.checked = !desired; });
+});
+
+document.getElementById('auto-fetch-time').addEventListener('change', (ev) => {
+  const input = ev.target;
+  const previous = input.dataset.previous || input.value;
+  if (!input.value) { input.value = previous; return; }
+  saveAppSetting({ auto_fetch_time: input.value }, () => { input.value = previous; });
+  input.dataset.previous = input.value;
+});
 
 async function loadVehicles() {
   const { vehicles } = await api('/api/vehicles');
@@ -452,6 +493,7 @@ document.querySelectorAll('[data-open-settings]').forEach((btn) => {
     if (!settingsLoaded) {
       settingsLoaded = true;
       await loadSources();
+      await loadAppSettings();
       await loadPrices();
       await loadVehicles();
       await loadReportSettings();

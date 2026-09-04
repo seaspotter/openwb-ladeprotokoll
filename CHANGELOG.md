@@ -7,6 +7,17 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Added
+- Automatic daily fetch is now configurable instead of a hardcoded fixed
+  interval: a new "Automatischer Abruf aktiv" checkbox + time picker in
+  Einstellungen -> Quellen (`app_settings` table, `GET/PUT
+  /api/app-settings`) lets it be turned off entirely, or scheduled at any
+  wall-clock time (default `00:05`, shortly after midnight) instead of
+  always running 24h after whenever the process last started.
+- The overview page (`/`) now shows "Letzter Abruf: ..." — the most
+  recent successful fetch across all sources — instead of a one-off
+  "N Quelle(n) erfolgreich abgerufen" message that only appeared right
+  after clicking "Jetzt abrufen" and said nothing once the page had been
+  open a while.
 - Vehicle Kennzeichen (license plate) documentation: a new "Fahrzeuge"
   settings panel lists every vehicle name ever seen with an editable
   Kennzeichen field (`vehicles` table, `GET /api/vehicles`, `PUT
