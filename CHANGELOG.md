@@ -6,6 +6,14 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- CI: `.github/workflows/release.yml` publishes an actual GitHub Release
+  on every `vX.Y.Z` tag push, with the matching `## [X.Y.Z]` CHANGELOG.md
+  section as the release notes -- previously `git tag && git push --tags`
+  only created the tag itself, so the repo's Releases page kept showing
+  an older version as "Latest" until someone ran `gh release create` by
+  hand (caught right after tagging v0.2.0, which needed exactly that).
+
 ## [0.2.0] - 2026-09-04
 
 ### Added

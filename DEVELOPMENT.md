@@ -29,14 +29,24 @@ To cut a release:
 
 1. On `dev`, rename `CHANGELOG.md`'s `## [Unreleased]` section to
    `## [X.Y.Z] - YYYY-MM-DD` and start a fresh empty `[Unreleased]` above
-   it.
+   it — step 3's release notes are extracted verbatim from this section,
+   so it has to exist and be named correctly *before* the tag is pushed.
 2. `git checkout main && git merge --ff-only dev` — fast-forward, not
    `--no-ff` (see `openwb-logger/DEVELOPMENT.md` for why this matters for
    self-update's `git describe`).
 3. `git tag vX.Y.Z && git push origin main --tags`.
 
-That last push triggers `.github/workflows/docker-publish.yml` to build
-and publish the multi-arch image — see `DEPLOYMENT.md`.
+That last push triggers two workflows on the new tag:
+`.github/workflows/docker-publish.yml` builds and publishes the
+multi-arch image (see `DEPLOYMENT.md`), and
+`.github/workflows/release.yml` publishes an actual GitHub Release for
+the tag — pulling its notes straight from the `## [X.Y.Z]` section step 1
+just created — so the repo's Releases page shows the new version as
+"Latest" without a separate manual `gh release create`. (A plain
+`git tag && git push --tags` only creates the tag; earlier releases had
+to be published as a GitHub Release by hand afterward, which is what this
+workflow now does automatically — see `CHANGELOG.md`'s `[Unreleased]`
+entry for when this was added.)
 
 ## Setup
 
