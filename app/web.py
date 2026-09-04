@@ -558,17 +558,16 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
     return sessions, ordered_rows
 
 
-# German label for report_build.COST_BASES, shown as the PDF's own
-# "Kostenbasis" meta line and as a column in "Bisherige Berichte" -- since
-# cost_basis is now choosable per report (not just a fixed app-wide
-# value), the document has to say which one it used to be
-# self-explanatory on its own.
+# German label for report_build.COST_BASES, shown as a "Kostenbasis"
+# column in "Bisherige Berichte" (report_review.html) -- the PDF itself
+# deliberately does not display which basis it used (explicit user
+# feedback: this is a review-time detail, not something the document
+# needs to spell out).
 _COST_BASIS_LABELS = {"openwb": "openWB-Wert", "corrected": "Korrigiert"}
 
 
 async def _report_meta(
     pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict,
-    cost_basis: str,
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
@@ -593,7 +592,6 @@ async def _report_meta(
         vehicle_names=vehicle_display,
         show_signature_line=settings["show_signature_line"],
         orientation=settings["orientation"],
-        cost_basis_label=_COST_BASIS_LABELS[cost_basis],
     )
 
 
@@ -661,9 +659,7 @@ async def api_report_preview(body: ReportBuildIn):
         data = build_report_data(sessions, body.columns or settings["default_columns"], cost_basis)
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    meta = await _report_meta(
-        pool, "Vorschau", "Vorschau", datetime.now(), rows, settings, cost_basis
-    )
+    meta = await _report_meta(pool, "Vorschau", "Vorschau", datetime.now(), rows, settings)
     return render_html(data, meta)
 
 
@@ -704,8 +700,7 @@ async def _generate_report(
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), title, report_row["created_at"], rows, settings,
-                resolved_cost_basis,
+                pool, str(report_id), title, report_row["created_at"], rows, settings
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(

@@ -160,9 +160,9 @@ Nicht vergessen: nach Änderungen unten **Speichern** klicken.
 "Bisherige Berichte" zeigt zu jedem Bericht, welche Kostenbasis er
 tatsächlich verwendet hat ("Kostenbasis"-Spalte) — ein später erzeugter
 Bericht mit anderer Kostenbasis lässt sich so von einem älteren
-unterscheiden, ohne das PDF öffnen zu müssen. Das PDF selbst dokumentiert
-seine Kostenbasis ebenfalls, als eigene Zeile ("Kostenbasis") neben
-Zeitraum/Quelle(n)/Fahrzeug(e).
+unterscheiden, ohne das PDF öffnen zu müssen. Das PDF selbst zeigt die
+Kostenbasis bewusst nicht als eigene Zeile — nur die "Kosten"-Spalte
+darin.
 
 Welche Spalten im PDF erscheinen, wird ausschließlich unter Einstellungen
 → Berichts-Einstellungen festgelegt (siehe oben) — nur die Kostenbasis

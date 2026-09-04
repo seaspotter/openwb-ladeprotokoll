@@ -31,9 +31,10 @@ what that means in practice for this project.
 - Report generation gets a "Kostenbasis" choice (openWB-Wert/Korrigiert)
   right next to the title field in "Bericht erstellen" -- a conscious,
   per-report override of the existing Berichts-Einstellungen default, not
-  a change to what that default means. The generated PDF documents which
-  basis it used as its own "Kostenbasis" meta line, and "Bisherige
-  Berichte" shows the same per report.
+  a change to what that default means. "Bisherige Berichte" shows which
+  basis each report actually used; the PDF itself deliberately does not
+  (a "Kostenbasis" meta line was tried and removed per user feedback --
+  it's a review-time detail, not something the document needs to state).
 - The Übersicht and Bericht-erstellen session tables' cost columns
   renamed: "Kosten (openWB)" -> "Kosten (real)", "Kosten (verwendet)" ->
   "Kosten (korrigiert)" -- clearer than "verwendet" for what the second

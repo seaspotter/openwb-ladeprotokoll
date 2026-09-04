@@ -191,13 +191,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   already-formatted display strings, not bare names — each vehicle with a
   `vehicles.license_plate` set is rendered `"<name> (<plate>)"` in the
   "Fahrzeug(e)" meta line, so the Kennzeichen ends up documented on every
-  report without needing its own column. `ReportMeta.cost_basis_label`
-  (web.py's small local `_COST_BASIS_LABELS` dict, not something
-  `report_build.py` owns — `cost_basis` itself is already validated by
-  `report_build.build()`) is its own "Kostenbasis" meta line, since
-  `cost_basis` is chosen per report (see `web.py` below), not a single
-  fixed app-wide value — the document has to say which one it used to
-  stay self-explanatory. The "Kosten" column/cell never
+  report without needing its own column. The document deliberately does
+  **not** show which `cost_basis` it used as its own meta line — a
+  "Kostenbasis" row was tried there and removed after explicit user
+  feedback that it's a review-time detail (see `web.py`'s
+  `_COST_BASIS_LABELS`, still used for "Bisherige Berichte"'s own
+  "Kostenbasis" column, just not fed into `ReportMeta` any more). The
+  "Kosten" column/cell never
   gets the red `.flagged` styling that `index.html`/`report_review.html`
   use for a session whose corrected cost diverges from openWB's own value
   — that highlighting is deliberately a review-time aid for deciding what
