@@ -300,9 +300,18 @@ async def _query_sessions(
     chargepoint: str | None = None,
     from_: date | None = None,
     to: date | None = None,
+    split_pv_bat: bool = False,
 ) -> list[dict]:
-    """Shared by the /api/sessions HTTP route and the MCP search_sessions
-    tool (mcp_server.py) -- same filters, same price-decision enrichment."""
+    """Shared by the /api/sessions HTTP route (Übersicht, Bericht-review,
+    and the MCP search_sessions tool) and /api/statistics -- same filters,
+    same base price-decision enrichment. `split_pv_bat` is off by default,
+    keeping cost_corrected the plain price_entries-rate-times-energy_kwh
+    figure everywhere it has always been (Übersicht, Bericht erstellen,
+    generated reports/PDFs, MCP) -- only /api/statistics passes True, so
+    the PV-/battery-source split (report_settings.pv_price_per_kwh/
+    bat_price_per_kwh) affects *only* the /statistik page's aggregates,
+    per explicit user feedback after an earlier version applied it
+    app-wide and changed "Kosten (korrigiert)" everywhere unexpectedly."""
     clauses = []
     params: list = []
 
@@ -330,7 +339,11 @@ async def _query_sessions(
     # for a large session list.
     price_rows = await pool.fetch("SELECT * FROM price_entries")
     entries = [_price_entry_for_matching(r) for r in price_rows]
-    settings = await get_report_settings(pool)
+    split_kwargs = {}
+    if split_pv_bat:
+        settings = await get_report_settings(pool)
+        split_kwargs = {"pv_price_per_kwh": settings["pv_price_per_kwh"],
+                         "bat_price_per_kwh": settings["bat_price_per_kwh"]}
 
     sessions = []
     for r in rows:
@@ -338,20 +351,29 @@ async def _query_sessions(
              if k != "raw_json"}
         energy_kwh = float(r["energy_kwh"]) if r["energy_kwh"] is not None else None
         cost_openwb = float(r["cost_openwb"]) if r["cost_openwb"] is not None else None
-        decision = match_and_decide(
-            entries,
-            source_id=r["source_id"],
-            vehicle_name=r["vehicle_name"],
-            session_date=r["time_begin"].date(),
-            energy_kwh=energy_kwh,
-            cost_openwb=cost_openwb,
-            power_source_grid_pct=_to_float(r["power_source_grid_pct"]),
-            power_source_pv_pct=_to_float(r["power_source_pv_pct"]),
-            power_source_bat_pct=_to_float(r["power_source_bat_pct"]),
-            power_source_cp_pct=_to_float(r["power_source_cp_pct"]),
-            pv_price_per_kwh=settings["pv_price_per_kwh"],
-            bat_price_per_kwh=settings["bat_price_per_kwh"],
-        )
+        if split_pv_bat:
+            decision = match_and_decide(
+                entries,
+                source_id=r["source_id"],
+                vehicle_name=r["vehicle_name"],
+                session_date=r["time_begin"].date(),
+                energy_kwh=energy_kwh,
+                cost_openwb=cost_openwb,
+                power_source_grid_pct=_to_float(r["power_source_grid_pct"]),
+                power_source_pv_pct=_to_float(r["power_source_pv_pct"]),
+                power_source_bat_pct=_to_float(r["power_source_bat_pct"]),
+                power_source_cp_pct=_to_float(r["power_source_cp_pct"]),
+                **split_kwargs,
+            )
+        else:
+            decision = match_and_decide(
+                entries,
+                source_id=r["source_id"],
+                vehicle_name=r["vehicle_name"],
+                session_date=r["time_begin"].date(),
+                energy_kwh=energy_kwh,
+                cost_openwb=cost_openwb,
+            )
         # asyncpg returns NUMERIC as Decimal -- these fields go out as
         # plain JSON numbers over HTTP either way, but statistics.py's
         # aggregate() does real float arithmetic on them (energy_kwh *
@@ -429,14 +451,19 @@ async def api_statistics(
 ):
     """Per-month/year aggregates plus a per-vehicle breakdown (energy,
     cost, grid/PV/battery/chargepoint kWh split) for the /statistik
-    page's charts. Reuses _query_sessions for the actual data (same
-    price-decision enrichment the overview/review pages already show) and
-    report_settings' cost_basis for which cost figure to sum -- one
+    page's charts. Reuses _query_sessions for the actual data, but with
+    split_pv_bat=True -- this is the *only* place cost_corrected reflects
+    report_settings' pv_price_per_kwh/bat_price_per_kwh split (see
+    _query_sessions' docstring); Übersicht/Bericht-review/reports all get
+    the plain price_entries-rate figure via the same function's default.
+    report_settings' cost_basis decides which cost figure to sum -- one
     "Kosten" total, same simplification as report_build.py, not
     openWB/corrected side by side."""
     pool = get_pool()
     settings = await get_report_settings(pool)
-    sessions = await _query_sessions(pool, source_id, vehicle, None, None, None)
+    sessions = await _query_sessions(
+        pool, source_id, vehicle, None, None, None, split_pv_bat=True
+    )
     try:
         periods = aggregate_statistics(sessions, granularity, settings["cost_basis"])
         by_vehicle = aggregate_by_vehicle_statistics(sessions, settings["cost_basis"])
@@ -498,32 +525,22 @@ def _jsonable(value):
     return value
 
 
-def _resolve_price_decision(
-    row, entries_list, entries_by_id, override, pv_price_per_kwh, bat_price_per_kwh
-):
+def _resolve_price_decision(row, entries_list, entries_by_id, override):
+    """Plain, flat-rate price decision (price_entries rate x total
+    energy_kwh) -- deliberately does NOT apply the PV-/battery-source
+    split from _query_sessions' split_pv_bat=True path. Reports and their
+    PDFs must stay reproducible/consistent with what a user saw in
+    Bericht-review at generation time, and that review view itself is
+    Übersicht-like (plain price_entries figures), not statistics-like."""
     energy_kwh = _to_float(row["energy_kwh"])
     cost_openwb = _to_float(row["cost_openwb"])
-    power_source_kwargs = {
-        "power_source_grid_pct": _to_float(row["power_source_grid_pct"]),
-        "power_source_pv_pct": _to_float(row["power_source_pv_pct"]),
-        "power_source_bat_pct": _to_float(row["power_source_bat_pct"]),
-        "power_source_cp_pct": _to_float(row["power_source_cp_pct"]),
-        "pv_price_per_kwh": pv_price_per_kwh,
-        "bat_price_per_kwh": bat_price_per_kwh,
-    }
     if override == "openwb":
-        return decide_price(
-            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None,
-            **power_source_kwargs,
-        )
+        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None)
     if override is not None:
         entry = entries_by_id.get(int(override))
         if entry is None:
             raise HTTPException(status_code=400, detail=f"Unbekannter Preis-Override: {override}")
-        return decide_price(
-            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry,
-            **power_source_kwargs,
-        )
+        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry)
     return match_and_decide(
         entries_list,
         source_id=row["source_id"],
@@ -531,7 +548,6 @@ def _resolve_price_decision(
         session_date=row["time_begin"].date(),
         energy_kwh=energy_kwh,
         cost_openwb=cost_openwb,
-        **power_source_kwargs,
     )
 
 
@@ -553,16 +569,12 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 
     price_rows = await pool.fetch("SELECT * FROM price_entries")
     entries_list = [_price_entry_for_matching(r) for r in price_rows]
-    settings = await get_report_settings(pool)
     entries_by_id = {e["id"]: e for e in entries_list}
 
     sessions = []
     for r in ordered_rows:
         override = price_overrides.get(r["id"]) if price_overrides else None
-        decision = _resolve_price_decision(
-            r, entries_list, entries_by_id, override,
-            settings["pv_price_per_kwh"], settings["bat_price_per_kwh"],
-        )
+        decision = _resolve_price_decision(r, entries_list, entries_by_id, override)
         sessions.append({
             "id": r["id"],
             "time_begin": r["time_begin"],

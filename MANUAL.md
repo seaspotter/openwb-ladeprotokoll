@@ -76,13 +76,19 @@ Zeitzone des Containers, nicht zwingend die des Browsers.
 ### Preise
 
 Ein Preis-Eintrag legt fest, mit welchem Strompreis openWBs eigene
-Kostenberechnung überprüft und ggf. korrigiert wird. Dieser Preis gilt nur
-für den aus dem **Netz** bezogenen Anteil eines Ladevorgangs — der
-PV- und Batterie-Anteil wird separat bepreist, siehe "PV-Preis"/
-"Batterie-Preis" unter "Berichts-Einstellungen" weiter unten. Ein
-Ladevorgang mit z. B. 60 % Netz, 30 % PV und 10 % Speicher wird also aus
-drei Anteilen zusammengesetzt, nicht mit einem einzigen Preis für die
-gesamte geladene Energie.
+Kostenberechnung überprüft und ggf. korrigiert wird ("Kosten (korrigiert)"
+in der Übersicht, bei "Bericht erstellen" und im PDF).
+
+Ganz oben im Bereich stehen außerdem zwei eigene Felder, **PV-Preis** und
+**Batterie-Preis** (€/kWh, Standard jeweils 0, per "Speichern" sofort
+gespeichert). Diese wirken sich **ausschließlich auf die Statistik-Seite**
+aus: dort wird jeder Ladevorgang nach seinem tatsächlichen Netz-/PV-/
+Speicher-Anteil bepreist (z. B. 60 % Netz zum obigen Preis, 30 % PV zum
+PV-Preis, 10 % Speicher zum Batterie-Preis), statt mit einem einzigen
+Preis für die gesamte geladene Energie. Übersicht, Bericht erstellen und
+bereits erzeugte wie neue PDFs bleiben davon unberührt — dort gilt
+weiterhin ausschließlich der oben eingetragene Preis-Eintrag für die
+gesamte Energiemenge, unabhängig davon, woher sie kam.
 
 - **Preis hinzufügen** — über das "+" neben "Preise" öffnet sich das
   Formular: Anbieter, Preis pro kWh, sowie optional eine Quelle und/oder
@@ -131,12 +137,6 @@ Auswahl mehr:
   eine "Kosten"-Spalte im PDF, keine zwei nebeneinander. Lässt sich pro
   Bericht in "Bericht erstellen" noch einmal bewusst übersteuern (siehe
   unten) — dieser Wert hier ist nur die Vorbelegung.
-- **PV-Preis** / **Batterie-Preis** (€/kWh) — die zwei globalen Preise für
-  den PV- bzw. Speicher-Anteil eines Ladevorgangs (siehe "Preise" oben);
-  Standard jeweils 0. Anders als die übrigen Felder auf dieser Seite gelten
-  diese beiden **sofort überall**, nicht erst für künftig erzeugte
-  Berichte — sie fließen unmittelbar in die korrigierten Kosten in der
-  Übersicht, der Statistik und neuen Berichten ein.
 - **Ausrichtung** — Hochkant (Standard) oder Querformat. Bei vielen
   ausgewählten Spalten passt Hochkant u. U. nicht mehr sauber auf eine
   Seite — dann Querformat wählen.
@@ -208,12 +208,16 @@ kam — monatlich oder jährlich zusammengefasst.
   ein einzelner sehr großer Ladevorgang mit viel PV-Anteil verschiebt das
   Bild also stärker als mehrere kleine Ladevorgänge mit wenig PV-Anteil,
   was der Realität eher entspricht als eine einfache Durchschnittsbildung.
-- **Kosten** — Balkendiagramm pro Zeitraum, zeigt dieselbe "Kosten"-Größe
-  wie überall sonst in der Anwendung (openWB-Wert oder korrigiert, je
-  nach Berichts-Einstellungen → Kosten-Spalte zeigt) — welche der beiden
-  gerade aktiv ist, steht direkt in der Überschrift ("Kosten (openWB-Wert)"
-  bzw. "Kosten (Korrigiert)"), ebenso in der Summe-Kachel und der
-  Nach-Fahrzeug-Spalte.
+- **Kosten** — Balkendiagramm pro Zeitraum, zeigt openWB-Wert oder
+  korrigiert (je nach Berichts-Einstellungen → Kosten-Spalte zeigt) —
+  welche der beiden gerade aktiv ist, steht direkt in der Überschrift
+  ("Kosten (openWB-Wert)" bzw. "Kosten (Korrigiert)"), ebenso in der
+  Summe-Kachel und der Nach-Fahrzeug-Spalte. Bei "Korrigiert" ist diese
+  Seite die **einzige** Stelle in der Anwendung, an der zusätzlich
+  PV-Preis/Batterie-Preis einfließen (siehe "Preise" oben) — die
+  korrigierten Kosten hier können sich daher von den korrigierten Kosten
+  in Übersicht/Bericht erstellen/PDF unterscheiden, wenn PV-Preis oder
+  Batterie-Preis gesetzt sind.
 - **Nach Fahrzeug** — Tabelle mit Ladevorgängen, Energie, Netz-/PV-/
   Speicher-Anteil (je in %) und Kosten je Fahrzeug (nicht nach Zeitraum),
   absteigend nach Energie sortiert — zum Vergleichen mehrerer Fahrzeuge

@@ -137,6 +137,16 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   the conservative choice when the real mix is unknown (it never invents
   a PV/battery discount that may not have applied). Unit tested,
   including the split-pricing and unknown-split-defaults-to-grid cases.
+  **Scope, corrected same day**: this function itself is source-agnostic
+  about *where* it's used, but only `web.py`'s `/api/statistics` route
+  actually calls it with the split-pricing kwargs — an initial version
+  wired it into every price decision app-wide (Übersicht, Bericht
+  erstellen, generated PDFs too), which silently changed "Kosten
+  (korrigiert)" everywhere the moment PV-/Batterie-Preis were set to a
+  nonzero value; the user had only wanted it for the Statistik page ("i
+  only wanted to make the statistics better"). See `web.py`'s
+  `_query_sessions`/`split_pv_bat` note below for the actual scoping —
+  don't widen this again without being asked.
 - `app/report_build.py` — **pure**: sessions + a selected column list +
   a `cost_basis` ("openwb" or "corrected") + each session's resolved price
   decision -> the `ReportData` structure (formatted display cells,
@@ -160,9 +170,21 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   ("portrait"/"landscape"), `show_signature_line`, and
   `pv_price_per_kwh`/`bat_price_per_kwh` (both `>= 0`, default `0`, the
   two global rates `price_entries.corrected_cost` uses for a session's
-  PV-/battery-sourced energy share — see that module's note) — edited
-  from Einstellungen's "Berichts-Einstellungen" panel via `GET/PUT
-  /api/report-settings`. `validate()` is pure and unit tested;
+  PV-/battery-sourced energy share, read **only** by `/api/statistics` —
+  see `price_entries.py`'s and `web.py`'s notes on why this stays scoped
+  to Statistik). Still stored in `report_settings` despite no longer
+  affecting reports (moving it to its own table wasn't worth the churn
+  for two fields), but edited from the **"Preise"** panel in
+  `_settings_modal.html`, not "Berichts-Einstellungen" — a dedicated
+  small always-visible form (`#pv-bat-price-form`, its own instant
+  "Speichern", not tied to the rest of Berichts-Einstellungen's submit)
+  right above the price-entries table, since these are conceptually
+  prices too and a user specifically asked for them "on top at the other
+  prices," not buried at the bottom of a report-formatting panel. Both
+  panels' forms hit the same `GET/PUT /api/report-settings` (a `PUT` with
+  just these two keys is a valid partial update, same merge-onto-current
+  pattern as any other partial `report_settings` write). `validate()` is
+  pure and unit tested;
   `get_settings`/`update_settings` do the DB round trip (upsert-on-first-
   read, so there's no separate seeding step) — verified with an
   integration test that a setting written via `PUT` survives a completely
@@ -238,18 +260,29 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `patch: dict` + `validate()`-raises-400 pattern as report-settings, not
   a pydantic model — needed since it's a partial update of two unrelated
   fields), session listing (enriched with each session's matched price
-  decision, computed via `match_and_decide`/`decide_price` with the
-  session's own `power_source_*_pct` fields plus `report_settings`'s
-  `pv_price_per_kwh`/`bat_price_per_kwh` threaded through so the split-
-  pricing correction applies everywhere a price decision is resolved, not
-  just at report generation; filterable by source/vehicle/**chargepoint**/
-  date),
+  decision; filterable by source/vehicle/**chargepoint**/date),
   `GET /api/statistics` (`statistics.py`'s `aggregate()` *and*
   `aggregate_by_vehicle()` over the same `_query_sessions`-fetched
   sessions in one call — no second DB round trip for the by-vehicle
   breakdown — returning `{"periods": [...], "by_vehicle": [...]}`;
   `report_settings`'s `cost_basis` decides which cost figure to sum), and
-  report preview/generate/list/pdf/delete. Plain
+  report preview/generate/list/pdf/delete. `_query_sessions` (shared by
+  `GET /api/sessions`, MCP's `search_sessions`, and `/api/statistics`)
+  takes a `split_pv_bat: bool = False` param controlling whether
+  `match_and_decide` gets the session's `power_source_*_pct` fields and
+  `report_settings.pv_price_per_kwh`/`bat_price_per_kwh` (see
+  `price_entries.corrected_cost`'s note) — **only** `/api/statistics`
+  passes `True`; every other caller keeps the default `False`, i.e. the
+  plain flat `price_entries`-rate-times-`energy_kwh` figure Übersicht,
+  Bericht erstellen, and generated reports/PDFs have always shown.
+  `_load_report_sessions`/`_resolve_price_decision` (report preview/
+  generation) never take the split kwargs at all — reports intentionally
+  match what Bericht-review showed at generation time, not the
+  statistics-only split. Don't widen `split_pv_bat=True` beyond
+  `/api/statistics` without being asked — an earlier version applied it
+  everywhere and visibly changed every "Kosten (korrigiert)" figure in
+  the app the moment PV-/Batterie-Preis were set, which the user had not
+  wanted. Plain
   parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns
   as `Decimal`; anything feeding `price_entries.py`/`report_build.py`/
   `statistics.py` converts to `float` first (`_to_float`, and
@@ -410,7 +443,17 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   button; a native time input's `change` event only fires once a value is
   committed, not per keystroke, so this doesn't spam the API). Price
   entries have a `notes` field here (form + table column) — an unlabeled
-  provider+date-range row is meaningless months later. The "Fahrzeuge"
+  provider+date-range row is meaningless months later. Right above the
+  price-entries table sits a small always-visible `#pv-bat-price-form`
+  (PV-Preis/Batterie-Preis, €/kWh) with its own instant "Speichern" —
+  despite being stored in `report_settings` (see that module's note on
+  why), it lives in the **Preise** panel, not "Berichts-Einstellungen",
+  since a user asked for it "on top at the other prices" rather than
+  buried at the bottom of a report-formatting panel; the hint text right
+  below it says explicitly this only affects `/statistik`, not
+  Übersicht/Bericht erstellen/PDFs — an earlier version wired the same
+  two fields into every price decision app-wide, which the user did not
+  want (see `web.py`'s `split_pv_bat` note). The "Fahrzeuge"
   panel (`loadVehicles()`, `GET /api/vehicles`, `PUT
   /api/vehicles/{name}`) lists every vehicle name ever seen with an
   editable Kennzeichen input and a per-row "Speichern" button — a small
@@ -419,16 +462,7 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   Einstellungen" (`GET/PUT /api/report-settings`) is the **only** place
   PDF columns are chosen — `report_review.html` used to have its own
   second column checklist too, which was confusing (two places to set
-  the same thing) and is gone; see `report_settings.py`. That same panel
-  also has the "PV-Preis"/"Batterie-Preis" (€/kWh) inputs, saved by the
-  same form/submit handler as the other report settings — placed here
-  rather than in the "Preise" panel because they live in the
-  `report_settings` table, not `price_entries` (they're global, not
-  scoped by source/vehicle/date the way a price entry is); the panel's
-  hint text says explicitly that these two fields are the exception to
-  "only affects new reports" — they change the corrected cost everywhere
-  (Übersicht, Statistik, new reports) the moment they're saved, unlike
-  every other field in this panel.
+  the same thing) and is gone; see `report_settings.py`.
 - `app/templates/report_review.html` — session/price-override selection UI
   (`/report-review`): filters (source/vehicle/chargepoint/date, same
   dropdown-not-free-text pattern as `index.html`) load sessions via
@@ -474,7 +508,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   suffixed with which basis is active (`loadCostBasisLabel()`, fetched
   once via `GET /api/report-settings` at page load) — added after a user
   asked "which Kosten are these, real or corrected?" with nothing on the
-  page actually saying so. Chart colors (`chartColors()`) are read from the
+  page actually saying so. When that basis is "korrigiert", the figure
+  this page shows is *not quite* the same "korrigiert" a session shows on
+  Übersicht/Bericht erstellen — this page is the one place that also
+  factors in PV-Preis/Batterie-Preis (`web.py`'s `_query_sessions(...,
+  split_pv_bat=True)`), so it prices each session's actual grid/PV/
+  battery mix rather than one flat price_entries rate over the total; see
+  `price_entries.py`'s and `web.py`'s notes for why that split is scoped
+  to this page only. Chart colors (`chartColors()`) are read from the
   page's own CSS custom properties (`--text`/`--muted`/`--border`) at
   chart-creation time so both themes render correctly — picked once per
   `loadStatistics()` call, not live-updated on a theme toggle mid-session

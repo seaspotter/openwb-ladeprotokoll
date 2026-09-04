@@ -122,6 +122,13 @@
         <h3>Preise</h3>
         <button type="button" class="icon-btn" id="toggle-add-price" title="Preis hinzufügen">+</button>
       </div>
+      <form class="inline" id="pv-bat-price-form">
+        <label>PV-Preis (€/kWh): <input type="number" id="pv-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
+        <label>Batterie-Preis (€/kWh): <input type="number" id="bat-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
+        <button type="submit">Speichern</button>
+        <span class="muted" id="pv-bat-price-result"></span>
+      </form>
+      <p class="hint">Nur für die Statistik: dort wird jeder Ladevorgang nach seinem tatsächlichen Netz-/PV-/Speicher-Anteil bepreist statt mit einem einzigen Preis über die gesamte Energie -- der Netzanteil weiterhin mit dem passenden Preis unten. Übersicht, Bericht erstellen und PDFs sind davon nicht betroffen.</p>
       <table id="prices-table">
         <thead>
           <tr>
@@ -171,7 +178,7 @@
 
     <div class="panel">
       <h3>Berichts-Einstellungen</h3>
-      <p class="hint">Gelten für neue Berichte in "Bericht erstellen" — bereits erzeugte PDFs sind davon nicht betroffen. Dies ist die einzige Stelle, an der die PDF-Spalten gewählt werden. PV-/Batterie-Preis sind die Ausnahme: sie fließen sofort überall in den korrigierten Preis ein (Übersicht, Statistik, neue Berichte), nicht erst ab dem nächsten erzeugten Bericht — der Netzpreis kommt weiterhin aus den zeitlich gültigen Einträgen unter "Preise".</p>
+      <p class="hint">Gelten für neue Berichte in "Bericht erstellen" — bereits erzeugte PDFs sind davon nicht betroffen. Dies ist die einzige Stelle, an der die PDF-Spalten gewählt werden.</p>
       <p class="muted" style="margin-top: 0;">PDF-Spalten</p>
       <div class="columns-grid" id="report-columns-grid"></div>
       <form class="inline" id="report-settings-form">
@@ -181,8 +188,6 @@
             <option value="openwb">openWB-Wert</option>
           </select>
         </label>
-        <label title="Preis für PV-erzeugten Anteil der Energie, unabhängig vom Netzpreis in &quot;Preise&quot;">PV-Preis (€/kWh): <input type="number" id="pv-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
-        <label title="Preis für aus dem Speicher entnommenen Anteil der Energie">Batterie-Preis (€/kWh): <input type="number" id="bat-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
         <label>Ausrichtung:
           <select id="orientation">
             <option value="portrait">Hochkant</option>
@@ -342,10 +347,10 @@ async function loadReportSettings() {
     grid.appendChild(label);
   }
   document.getElementById('cost-basis').value = settings.cost_basis;
-  document.getElementById('pv-price-per-kwh').value = settings.pv_price_per_kwh;
-  document.getElementById('bat-price-per-kwh').value = settings.bat_price_per_kwh;
   document.getElementById('orientation').value = settings.orientation;
   document.getElementById('show-signature-line').checked = settings.show_signature_line;
+  document.getElementById('pv-price-per-kwh').value = settings.pv_price_per_kwh;
+  document.getElementById('bat-price-per-kwh').value = settings.bat_price_per_kwh;
 }
 
 document.getElementById('toggle-add-source').addEventListener('click', () => {
@@ -480,8 +485,6 @@ document.getElementById('report-settings-form').addEventListener('submit', async
     document.querySelectorAll('#report-columns-grid input[type=checkbox]:checked')
   ).map((el) => el.dataset.column);
   const cost_basis = document.getElementById('cost-basis').value;
-  const pv_price_per_kwh = parseFloat(document.getElementById('pv-price-per-kwh').value) || 0;
-  const bat_price_per_kwh = parseFloat(document.getElementById('bat-price-per-kwh').value) || 0;
   const orientation = document.getElementById('orientation').value;
   const show_signature_line = document.getElementById('show-signature-line').checked;
   const resultEl = document.getElementById('report-settings-result');
@@ -490,10 +493,25 @@ document.getElementById('report-settings-form').addEventListener('submit', async
     await api('/api/report-settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        default_columns, cost_basis, pv_price_per_kwh, bat_price_per_kwh,
-        orientation, show_signature_line,
-      }),
+      body: JSON.stringify({ default_columns, cost_basis, orientation, show_signature_line }),
+    });
+    resultEl.textContent = 'Gespeichert.';
+  } catch (err) {
+    resultEl.textContent = 'Fehler: ' + err.message;
+  }
+});
+
+document.getElementById('pv-bat-price-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const pv_price_per_kwh = parseFloat(document.getElementById('pv-price-per-kwh').value) || 0;
+  const bat_price_per_kwh = parseFloat(document.getElementById('bat-price-per-kwh').value) || 0;
+  const resultEl = document.getElementById('pv-bat-price-result');
+  resultEl.textContent = '';
+  try {
+    await api('/api/report-settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pv_price_per_kwh, bat_price_per_kwh }),
     });
     resultEl.textContent = 'Gespeichert.';
   } catch (err) {
