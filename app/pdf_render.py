@@ -37,6 +37,12 @@ class ReportMeta:
     vehicle_names: list[str]
     show_signature_line: bool = False
     orientation: str = "portrait"
+    # German label for report_build.py's COST_BASIS_LABELS -- shown as a
+    # "Kostenbasis" meta line so the document is self-explanatory about
+    # what its "Kosten" figure actually means, without needing app context
+    # (matters once a report can use openWB's own value, the total-energy
+    # corrected value, or the grid-only corrected value).
+    cost_basis_label: str = "Korrigiert (gesamt)"
 
 
 def render_html(data: ReportData, meta: ReportMeta) -> str:

@@ -110,6 +110,7 @@ try {
           <th>Beginn</th><th>Fahrzeug</th><th>Ladepunkt</th>
           <th class="numeric">Energie</th><th class="numeric">Kosten (openWB)</th>
           <th>Preis</th><th class="numeric">Kosten (verwendet)</th>
+          <th class="numeric">Kosten (Netzbezug)</th>
         </tr>
       </thead>
       <tbody id="sessions-body"></tbody>
@@ -125,6 +126,11 @@ try {
     <h2>Bericht</h2>
     <form class="inline" id="report-form">
       <input type="text" id="report-title" placeholder="Titel (z.B. August 2026)" required>
+      <select id="report-cost-basis" title="Kostenbasis für diesen Bericht">
+        <option value="openwb">Kostenbasis: openWB-Wert</option>
+        <option value="corrected">Kostenbasis: Korrigiert (gesamt)</option>
+        <option value="corrected_grid_only">Kostenbasis: Korrigiert (nur Netzbezug)</option>
+      </select>
       <button type="button" id="preview-btn">Vorschau</button>
       <button type="submit">Bericht erzeugen</button>
     </form>
@@ -137,7 +143,7 @@ try {
     <h2>Bisherige Berichte</h2>
     <table id="reports-table">
       <thead>
-        <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th class="numeric">Kosten (korrigiert)</th><th></th></tr>
+        <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th>Kostenbasis</th><th class="numeric">Kosten</th><th></th></tr>
       </thead>
       <tbody id="reports-body"></tbody>
     </table>
@@ -212,6 +218,19 @@ function costUsedFor(s, overrideVal) {
   return s.cost_used;
 }
 
+function costUsedGridOnlyFor(s, overrideVal) {
+  if (overrideVal === 'openwb') return s.cost_openwb;
+  if (overrideVal && overrideVal !== 'auto') {
+    const entry = reviewPriceEntriesById[overrideVal];
+    if (entry && s.energy_kwh != null) {
+      const gridPct = s.power_source_grid_pct != null ? s.power_source_grid_pct : 100;
+      return s.energy_kwh * (gridPct / 100) * entry.price_per_kwh;
+    }
+    return s.cost_openwb;
+  }
+  return s.cost_used_grid_only;
+}
+
 function overrideOptionsHtml(s, current) {
   const autoLabel = s.price_provider ? `Automatisch (${s.price_provider})` : 'Automatisch (kein Preis)';
   let html = `<option value="auto" ${current === 'auto' ? 'selected' : ''}>${autoLabel}</option>`;
@@ -240,6 +259,7 @@ function renderSessionsTable() {
       <td class="numeric">${fmtNum(s.cost_openwb, 2, ' €')}</td>
       <td><select data-override-id="${s.id}">${overrideOptionsHtml(s, sel.override)}</select></td>
       <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(costUsed, 2, ' €')}</td>
+      <td class="numeric">${fmtNum(costUsedGridOnlyFor(s, sel.override), 2, ' €')}</td>
     `;
     body.appendChild(tr);
   }
@@ -247,7 +267,8 @@ function renderSessionsTable() {
 }
 
 function recomputeTotals() {
-  let duration = 0, energy = 0, discharged = 0, range = 0, costOpenwb = 0, costUsed = 0, count = 0;
+  let duration = 0, energy = 0, discharged = 0, range = 0;
+  let costOpenwb = 0, costUsed = 0, costUsedGridOnly = 0, count = 0;
   for (const s of sessions) {
     const sel = selection[s.id];
     if (!sel.checked) continue;
@@ -258,6 +279,7 @@ function recomputeTotals() {
     range += s.range_charged_km || 0;
     costOpenwb += s.cost_openwb || 0;
     costUsed += costUsedFor(s, sel.override) || 0;
+    costUsedGridOnly += costUsedGridOnlyFor(s, sel.override) || 0;
   }
   document.getElementById('session-count').textContent = `${sessions.length} Ladevorgänge geladen`;
   const grid = document.getElementById('totals-grid');
@@ -269,6 +291,7 @@ function recomputeTotals() {
     <div class="stat"><div class="label">Reichweite</div><div class="value">${fmtNum(range, 0, ' km')}</div></div>
     <div class="stat"><div class="label">Kosten (openWB)</div><div class="value">${fmtNum(costOpenwb, 2, ' €')}</div></div>
     <div class="stat"><div class="label">Kosten (korrigiert)</div><div class="value">${fmtNum(costUsed, 2, ' €')}</div></div>
+    <div class="stat"><div class="label">Kosten (Netzbezug)</div><div class="value">${fmtNum(costUsedGridOnly, 2, ' €')}</div></div>
   `;
 }
 
@@ -324,8 +347,14 @@ function currentSelectionPayload() {
   }
   // No `columns` here: which PDF columns appear is decided solely by
   // Berichts-Einstellungen (Einstellungen modal) -- omitting it makes the
-  // backend fall back to that saved default, see web.py.
-  return { session_ids, price_overrides };
+  // backend fall back to that saved default, see web.py. `cost_basis` IS
+  // sent, unlike `columns` -- it's a deliberate per-report choice made
+  // right here (see the "Kostenbasis" select above the Titel field), not
+  // something that should only ever live in one global settings panel.
+  return {
+    session_ids, price_overrides,
+    cost_basis: document.getElementById('report-cost-basis').value,
+  };
 }
 
 document.getElementById('filter-source').addEventListener('change', () => {
@@ -385,7 +414,8 @@ async function loadReports() {
       <td>${r.title}</td>
       <td>${new Date(r.created_at).toLocaleString('de-DE')}</td>
       <td class="numeric">${r.session_count}</td>
-      <td class="numeric">${fmtNum(r.total_cost_corrected, 2, ' €')}</td>
+      <td>${r.cost_basis_label}</td>
+      <td class="numeric">${fmtNum(r.total_cost, 2, ' €')}</td>
       <td>
         <a href="/reports/${r.id}/pdf" target="_blank">PDF</a>
         &nbsp;<button data-action="delete-report" data-id="${r.id}" class="danger">Löschen</button>
@@ -404,7 +434,10 @@ document.getElementById('reports-body').addEventListener('click', async (ev) => 
 });
 
 (async function init() {
-  await Promise.all([loadSourceFilter(), loadReviewPriceEntries()]);
+  const [reportSettings] = await Promise.all([
+    api('/api/report-settings'), loadSourceFilter(), loadReviewPriceEntries(),
+  ]);
+  document.getElementById('report-cost-basis').value = reportSettings.cost_basis;
   await loadVehicleAndChargepointFilters();
   await loadSessions();
   await loadReports();

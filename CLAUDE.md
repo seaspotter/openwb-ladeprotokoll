@@ -39,7 +39,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   — so it's a plain new `CREATE TABLE`, no additive `ALTER` needed.
   `app_settings` is a second single-row settings table alongside
   `report_settings`, deliberately kept separate since it's unrelated to
-  report generation — see `app_settings.py`.
+  report generation — see `app_settings.py`. `reports.cost_basis` and
+  `reports.total_cost_corrected_grid_only` were added additively (`ALTER
+  TABLE ... ADD COLUMN IF NOT EXISTS`, this project's own live deployment
+  already had real `reports` rows) alongside the `CREATE TABLE` version
+  for fresh installs — the `DEFAULT`s (`'corrected'`, `0`) backfill every
+  report generated before these columns existed, matching what
+  `report_settings.DEFAULT_COST_BASIS` was at the time.
 - `app/sources.py` — **pure**: `Source` dataclass plus `base_url`
   validation/normalization (bare IP, host:port, or full URL, all
   normalized to `scheme://host[:port]` with no trailing slash). Unit
@@ -107,25 +113,53 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   back to openWB's own when no entry applies), and whether the delta
   exceeds `DELTA_FLAG_THRESHOLD` (0.01). Always prices `energy_kwh`
   (per-row), never `energy_since_plugged_kwh` (cumulative) — see
-  `chargelog_parse.py`'s docstring for why that distinction matters. Unit
-  tested.
+  `chargelog_parse.py`'s docstring for why that distinction matters.
+  `decide_price`/`match_and_decide` also always compute a *second*,
+  grid-only variant (`cost_corrected_grid_only`/`cost_used_grid_only`) —
+  the same price × only the grid-imported share of `energy_kwh`
+  (`grid_pct`, the session's `power_source_grid_pct`), not the total —
+  for a reimbursement/accounting scenario where self-generated PV/battery
+  energy shouldn't count at the configured €/kWh rate. Always computed
+  alongside the total-energy figures, not behind a flag, so nothing has
+  to be remembered per price entry to get it (a per-entry opt-in flag was
+  considered and rejected per user feedback — too easy to forget and
+  silently get the wrong number for exactly the case that matters most).
+  Missing `grid_pct` (older records) is treated as 100% grid, never
+  silently undercounting. Unit tested, including this distinction.
 - `app/report_build.py` — **pure**: sessions + a selected column list +
-  a `cost_basis` ("openwb" or "corrected") + each session's resolved price
+  a `cost_basis` ("openwb", "corrected", or "corrected_grid_only") + each
+  session's resolved price
   decision -> the `ReportData` structure (formatted display cells,
   deduplicated price-basis block, totals) the template renders and that
   gets frozen into `report_sessions.snapshot`. `COLUMN_LABELS` is the
-  single source of truth for the 13 selectable columns (also served at
+  single source of truth for the 14 selectable columns (also served at
   `GET /api/report-columns` for the review UI) — note there is only ever
-  **one** `cost` column/total ("Kosten"), not separate openWB/corrected
-  ones side by side (a deliberate simplification per user feedback); which
-  underlying figure it shows is `cost_basis`, itself set once in
-  `report_settings.py`, not per-column. `ReportTotals` still keeps both
-  raw `cost_openwb`/`cost_corrected` sums internally (needed for the
-  `reports` table's own two total columns — no schema change was needed to
-  add this) even though the template only ever prints the one matching
-  `cost_basis`. Rows are always sorted chronologically ascending (oldest
-  first, latest at the bottom — a printed ledger reads that way) regardless
-  of what order sessions arrive in. Unit tested.
+  **one** `cost` column/total ("Kosten"), not the three openWB/corrected/
+  corrected-grid-only variants side by side (a deliberate simplification
+  per user feedback, extended from the original openWB-vs-corrected case);
+  which underlying figure it shows is `cost_basis` — the global default
+  lives in `report_settings.py`, but (unlike `default_columns`) it's also
+  overridable **per report** at generation time (`web.py`'s
+  `ReportBuildIn.cost_basis`), a deliberate exception to the "settings,
+  not per-instance overrides" rule the rest of this app follows — the user
+  specifically wants a conscious per-report choice here (e.g. one report
+  priced for a company-car reimbursement, another for personal tracking),
+  not a global switch that has to be flipped back and forth and could be
+  left in the wrong state. `COST_BASIS_LABELS` maps each basis to its
+  German label, shown both as the PDF's own "Kostenbasis" meta line
+  (`ReportMeta.cost_basis_label`) and as a column in `report_review.html`'s
+  "Bisherige Berichte" list, so a report is self-explanatory about what its
+  own "Kosten" figure means without needing app context. The optional
+  "Netzbezug (kWh)" column (`_grid_energy_kwh`) shows the absolute
+  grid-imported kWh a `corrected_grid_only` report's cost was actually
+  priced against, for the same self-explanatory-document reason. `ReportTotals`
+  keeps all three raw `cost_openwb`/`cost_corrected`/
+  `cost_corrected_grid_only` sums internally (needed for the `reports`
+  table's own three total columns) even though the template only ever
+  prints the one matching `cost_basis`. Rows are always sorted
+  chronologically ascending (oldest first, latest at the bottom — a
+  printed ledger reads that way) regardless of what order sessions arrive
+  in. Unit tested.
 - `app/report_settings.py` — thin: a single-row `report_settings` table
   (id=1, `CHECK`-enforced) holding `default_columns` (the *only* column
   selection — see `_settings_modal.html`), `cost_basis`, `orientation`
@@ -194,7 +228,11 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   immutable document itself (explicit user feedback after seeing it in a
   generated PDF); `row.delta_flagged` is still computed and present in
   `ReportData` for the pages that do use it, the PDF template just ignores
-  it.
+  it. `ReportMeta.cost_basis_label` (`report_build.py`'s
+  `COST_BASIS_LABELS`) is shown as its own "Kostenbasis" meta-table row —
+  since `cost_basis` is now choosable per report (see `web.py` below), the
+  document has to say which one it used to be self-explanatory on its own,
+  not just correct.
 - `app/web.py` — FastAPI routes for source CRUD, fetch triggers, price
   entry CRUD (including price-entry `notes`), vehicle Kennzeichen CRUD,
   report-settings, app-settings (`GET/PUT /api/app-settings`, the same raw
@@ -231,7 +269,18 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   module-level functions the routes call rather than inlining directly —
   `mcp_server.py`'s `search_sessions`/`generate_report` tools call the
   exact same two functions, so there's one implementation of each, not a
-  second copy for MCP.
+  second copy for MCP. `_generate_report`'s `cost_basis` param (`None`
+  meaning "use report_settings' default") is resolved once
+  (`resolved_cost_basis`) and used for both the actual `build_report_data`
+  call and what gets persisted onto the `reports` row — so a report's
+  `cost_basis` column always reflects what its own PDF actually shows,
+  never the (possibly different, since changed later) current global
+  default. `_report_summary_row` computes `total_cost` by picking whichever
+  of the three stored raw totals matches that row's own `cost_basis`, so
+  `GET /reports`/`report_review.html`'s "Bisherige Berichte" table shows
+  one "Kosten" column (each report's real headline number) plus a
+  "Kostenbasis" column explaining what it is, rather than three columns of
+  mostly-irrelevant totals per row.
   `GET /api/vehicles` returns every vehicle name ever seen across all
   sources' sessions (`SELECT DISTINCT ... FROM sessions`), left-joined with
   its optional `vehicles.license_plate` — not just the rows that happen to
@@ -273,7 +322,11 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   prefix has no business surfacing through the MCP boundary. Two
   resources: `openwb://sources` and `openwb://report-columns`, for
   discovering valid `search_sessions`/`generate_report` parameter values
-  without a separate HTTP round-trip. No new authentication — same
+  without a separate HTTP round-trip. `generate_report`'s optional
+  `cost_basis` param mirrors the web UI's per-report override (`web.py`'s
+  `ReportBuildIn.cost_basis`) — an AI assistant generating a report can
+  ask for `"corrected_grid_only"` explicitly, same as picking it from the
+  dropdown in `report_review.html`. No new authentication — same
   no-auth, LAN-trust model as the rest of the app.
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
@@ -291,7 +344,12 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   indicator (updated on page load and after "Jetzt abrufen" via a fresh
   `GET /api/sources`, since the pre-fetch source list used to pick which
   sources to hit is stale by the time the fetches finish) that also
-  surfaces any source whose last scheduled/manual fetch failed.
+  surfaces any source whose last scheduled/manual fetch failed. The
+  sessions table's "Kosten (Netzbezug)" column (`s.cost_used_grid_only`,
+  already present on every `/api/sessions` row) is always shown here —
+  unlike the report-generation "Kostenbasis" choice, there's no toggle on
+  this read-only overview, just more information alongside the existing
+  "Kosten (openWB)"/"Kosten (verwendet)" columns.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
@@ -360,11 +418,22 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   (mirroring `report_build.py`'s summing logic in JS, since this is just
   an interactive preview — the server-side build via
   `/api/reports/preview`/`/api/reports` is the actual source of truth for
-  what a generated report contains); lists/links previously generated
-  reports. Sends no `columns` in its request bodies at all (see
-  `_settings_modal.html` above for why) — `web.py` falls back to
-  `report_settings`'s `default_columns` whenever `columns` is omitted.
-  Keep new UI copy in German too.
+  what a generated report contains, including its own "Kosten (Netzbezug)"
+  row/column, mirrored client-side via `costUsedGridOnlyFor()` next to the
+  existing `costUsedFor()`); lists/links previously generated reports.
+  Sends no `columns` in its request bodies at all (see `_settings_modal.html`
+  above for why) — `web.py` falls back to `report_settings`'s
+  `default_columns` whenever `columns` is omitted. `cost_basis` is the
+  deliberate exception to that rule: a `<select>` right next to the Titel
+  field (pre-filled from `GET /api/report-settings` on page load, but
+  always sent explicitly, never omitted) lets each report's cost basis be
+  a conscious per-generation choice — see `report_build.py`'s note on why
+  this one setting is overridable per-report while `columns` isn't.
+  "Bisherige Berichte" shows a "Kostenbasis" column
+  (`r.cost_basis_label`) and a single "Kosten" column (`r.total_cost` —
+  whichever raw total actually matches that report's own `cost_basis`),
+  not a `total_cost_corrected`-labeled column that would be wrong for a
+  grid-only report. Keep new UI copy in German too.
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
   (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as

@@ -141,9 +141,23 @@ _SCHEMA_STATEMENTS = [
         total_range_charged_km NUMERIC NOT NULL,
         total_cost_openwb NUMERIC NOT NULL,
         total_cost_corrected NUMERIC NOT NULL,
+        total_cost_corrected_grid_only NUMERIC NOT NULL DEFAULT 0,
+        -- Which of the three totals above this report's own "Kosten"
+        -- actually used -- see report_build.py's COST_BASIS_LABELS.
+        -- Default matches report_settings.DEFAULT_COST_BASIS, the
+        -- effective value for every report generated before this column
+        -- existed.
+        cost_basis TEXT NOT NULL DEFAULT 'corrected',
         pdf_data BYTEA NOT NULL
     );
     """,
+    # Added after reports already existed on some deployments (this
+    # project's own live deployment included) -- CREATE TABLE IF NOT
+    # EXISTS above is a no-op there, so these columns have to be added
+    # explicitly. The DEFAULTs backfill any existing row.
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS total_cost_corrected_grid_only "
+    "NUMERIC NOT NULL DEFAULT 0;",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS cost_basis TEXT NOT NULL DEFAULT 'corrected';",
     # session_id ON DELETE SET NULL, not CASCADE: a report must stay
     # readable/reproducible via its own frozen `snapshot` even if the
     # underlying cached session row is later deleted or refetched away --

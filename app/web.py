@@ -21,7 +21,7 @@ from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
 from .price_entries import PriceEntry, decide_price, match_and_decide
-from .report_build import COLUMN_LABELS, ReportBuildError
+from .report_build import COLUMN_LABELS, COST_BASIS_LABELS, ReportBuildError
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
 from .report_settings import get_settings as get_report_settings
@@ -65,6 +65,10 @@ class ReportBuildIn(BaseModel):
     # auto-matched, the literal "openwb" to force openWB's own cost (skip
     # correction entirely), or omitted/None for the normal auto-match.
     price_overrides: dict[int, int | str | None] = {}
+    # Overrides report_settings' cost_basis for this one report/preview --
+    # same "global default, overridable per request" pattern as `columns`
+    # above. None (the default) means "use the configured default".
+    cost_basis: str | None = None
 
 
 class ReportGenerateIn(ReportBuildIn):
@@ -208,7 +212,14 @@ def _price_entry_for_matching(r) -> PriceEntry:
 @router.get("/api/prices")
 async def api_list_prices():
     pool = get_pool()
-    rows = await pool.fetch("SELECT * FROM price_entries ORDER BY created_at DESC")
+    # By validity date, not insertion order -- entries are often added out
+    # of chronological order (e.g. backfilling an old tariff after already
+    # entering the current one), and "most recently valid first" is what's
+    # actually useful to scan at a glance. created_at as a tiebreaker for
+    # entries sharing the same valid_from.
+    rows = await pool.fetch(
+        "SELECT * FROM price_entries ORDER BY valid_from DESC, created_at DESC"
+    )
     return {"prices": [_price_row(r) for r in rows]}
 
 
@@ -333,6 +344,7 @@ async def _query_sessions(
              if k != "raw_json"}
         energy_kwh = float(r["energy_kwh"]) if r["energy_kwh"] is not None else None
         cost_openwb = float(r["cost_openwb"]) if r["cost_openwb"] is not None else None
+        grid_pct = _to_float(r["power_source_grid_pct"])
         decision = match_and_decide(
             entries,
             source_id=r["source_id"],
@@ -340,6 +352,7 @@ async def _query_sessions(
             session_date=r["time_begin"].date(),
             energy_kwh=energy_kwh,
             cost_openwb=cost_openwb,
+            grid_pct=grid_pct,
         )
         # asyncpg returns NUMERIC as Decimal -- these fields go out as
         # plain JSON numbers over HTTP either way, but statistics.py's
@@ -349,15 +362,15 @@ async def _query_sessions(
         # this dict a plain float/None consistently.
         d["energy_kwh"] = energy_kwh
         d["cost_openwb"] = cost_openwb
-        for pct_key in (
-            "power_source_grid_pct", "power_source_cp_pct",
-            "power_source_bat_pct", "power_source_pv_pct",
-        ):
+        d["power_source_grid_pct"] = grid_pct
+        for pct_key in ("power_source_cp_pct", "power_source_bat_pct", "power_source_pv_pct"):
             d[pct_key] = _to_float(r[pct_key])
         d["price_entry_id"] = decision.price_entry["id"] if decision.price_entry else None
         d["price_provider"] = decision.price_entry["provider"] if decision.price_entry else None
         d["cost_corrected"] = decision.cost_corrected
         d["cost_used"] = decision.cost_used
+        d["cost_corrected_grid_only"] = decision.cost_corrected_grid_only
+        d["cost_used_grid_only"] = decision.cost_used_grid_only
         d["cost_delta"] = decision.delta
         d["cost_delta_flagged"] = decision.delta_flagged
         sessions.append(d)
@@ -490,13 +503,18 @@ def _jsonable(value):
 def _resolve_price_decision(row, entries_list, entries_by_id, override):
     energy_kwh = _to_float(row["energy_kwh"])
     cost_openwb = _to_float(row["cost_openwb"])
+    grid_pct = _to_float(row["power_source_grid_pct"])
     if override == "openwb":
-        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None)
+        return decide_price(
+            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=None, grid_pct=grid_pct
+        )
     if override is not None:
         entry = entries_by_id.get(int(override))
         if entry is None:
             raise HTTPException(status_code=400, detail=f"Unbekannter Preis-Override: {override}")
-        return decide_price(energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry)
+        return decide_price(
+            energy_kwh=energy_kwh, cost_openwb=cost_openwb, price_entry=entry, grid_pct=grid_pct
+        )
     return match_and_decide(
         entries_list,
         source_id=row["source_id"],
@@ -504,6 +522,7 @@ def _resolve_price_decision(row, entries_list, entries_by_id, override):
         session_date=row["time_begin"].date(),
         energy_kwh=energy_kwh,
         cost_openwb=cost_openwb,
+        grid_pct=grid_pct,
     )
 
 
@@ -545,9 +564,12 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
             "range_charged_km": _to_float(r["range_charged_km"]),
             "meter_start_kwh": _to_float(r["meter_start_kwh"]),
             "meter_end_kwh": _to_float(r["meter_end_kwh"]),
+            "power_source_grid_pct": _to_float(r["power_source_grid_pct"]),
             "cost_openwb": decision.cost_openwb,
             "cost_corrected": decision.cost_corrected,
+            "cost_corrected_grid_only": decision.cost_corrected_grid_only,
             "cost_used": decision.cost_used,
+            "cost_used_grid_only": decision.cost_used_grid_only,
             "price_entry": decision.price_entry,
             "delta_flagged": decision.delta_flagged,
         })
@@ -555,7 +577,8 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 
 
 async def _report_meta(
-    pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict
+    pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict,
+    cost_basis: str,
 ) -> ReportMeta:
     source_rows = await pool.fetch("SELECT id, name FROM sources")
     sources_by_id = {r["id"]: r["name"] for r in source_rows}
@@ -580,6 +603,7 @@ async def _report_meta(
         vehicle_names=vehicle_display,
         show_signature_line=settings["show_signature_line"],
         orientation=settings["orientation"],
+        cost_basis_label=COST_BASIS_LABELS[cost_basis],
     )
 
 
@@ -605,13 +629,20 @@ def _content_disposition(filename: str) -> str:
 _REPORT_SUMMARY_SELECT = (
     "SELECT r.id, r.created_at, r.title, r.column_selection, r.total_duration_seconds, "
     "r.total_energy_kwh, r.total_energy_discharged_kwh, r.total_range_charged_km, "
-    "r.total_cost_openwb, r.total_cost_corrected, "
+    "r.total_cost_openwb, r.total_cost_corrected, r.total_cost_corrected_grid_only, "
+    "r.cost_basis, "
     "(SELECT count(*) FROM report_sessions rs WHERE rs.report_id = r.id) AS session_count "
     "FROM reports r"
 )
 
 
 def _report_summary_row(r) -> dict:
+    cost_basis = r["cost_basis"]
+    totals_by_basis = {
+        "openwb": float(r["total_cost_openwb"]),
+        "corrected": float(r["total_cost_corrected"]),
+        "corrected_grid_only": float(r["total_cost_corrected_grid_only"]),
+    }
     return {
         "id": r["id"],
         "created_at": r["created_at"].isoformat(),
@@ -623,6 +654,13 @@ def _report_summary_row(r) -> dict:
         "total_range_charged_km": float(r["total_range_charged_km"]),
         "total_cost_openwb": float(r["total_cost_openwb"]),
         "total_cost_corrected": float(r["total_cost_corrected"]),
+        "total_cost_corrected_grid_only": float(r["total_cost_corrected_grid_only"]),
+        "cost_basis": cost_basis,
+        "cost_basis_label": COST_BASIS_LABELS[cost_basis],
+        # The report's own actual headline total -- whichever of the three
+        # raw totals above matches cost_basis -- so the Bisherige-Berichte
+        # list can show one "Kosten" column instead of three per row.
+        "total_cost": totals_by_basis[cost_basis],
         "session_count": r["session_count"],
     }
 
@@ -633,48 +671,59 @@ async def api_report_preview(body: ReportBuildIn):
     to HTML and persists nothing -- for the review UI's live preview."""
     pool = get_pool()
     settings = await get_report_settings(pool)
+    cost_basis = body.cost_basis or settings["cost_basis"]
     sessions, rows = await _load_report_sessions(pool, body.session_ids, body.price_overrides)
     try:
-        data = build_report_data(
-            sessions, body.columns or settings["default_columns"], settings["cost_basis"]
-        )
+        data = build_report_data(sessions, body.columns or settings["default_columns"], cost_basis)
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    meta = await _report_meta(pool, "Vorschau", "Vorschau", datetime.now(), rows, settings)
+    meta = await _report_meta(
+        pool, "Vorschau", "Vorschau", datetime.now(), rows, settings, cost_basis
+    )
     return render_html(data, meta)
 
 
 async def _generate_report(
-    pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict
+    pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict,
+    cost_basis: str | None = None,
 ) -> dict:
     """Builds and persists an immutable report -- shared by the
     POST /api/reports HTTP route and the MCP generate_report tool
     (mcp_server.py). Reports are immutable once created -- "regenerate"
     always inserts a new row rather than updating an existing one. Insert
     happens in two steps because the PDF's own header/footer displays the
-    report's id, which only exists once the row is inserted. Raises
+    report's id, which only exists once the row is inserted. `cost_basis`
+    overrides report_settings' own default for this one report (None uses
+    the configured default) -- recorded on the row itself so "Bisherige
+    Berichte" can show which basis a given report actually used. Raises
     ReportBuildError (caller decides how to surface it: HTTPException for
     the HTTP route, a plain exception for the MCP tool)."""
     settings = await get_report_settings(pool)
+    resolved_cost_basis = cost_basis or settings["cost_basis"]
     sessions, rows = await _load_report_sessions(pool, session_ids, price_overrides)
-    data = build_report_data(sessions, columns or settings["default_columns"], settings["cost_basis"])
+    data = build_report_data(
+        sessions, columns or settings["default_columns"], resolved_cost_basis
+    )
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             report_row = await conn.fetchrow(
                 "INSERT INTO reports (title, column_selection, total_duration_seconds, "
                 "total_energy_kwh, total_energy_discharged_kwh, total_range_charged_km, "
-                "total_cost_openwb, total_cost_corrected, pdf_data) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at",
+                "total_cost_openwb, total_cost_corrected, total_cost_corrected_grid_only, "
+                "cost_basis, pdf_data) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at",
                 title, data.columns, data.totals.duration_seconds,
                 data.totals.energy_kwh, data.totals.energy_discharged_kwh,
                 data.totals.range_charged_km, data.totals.cost_openwb,
-                data.totals.cost_corrected, b"",
+                data.totals.cost_corrected, data.totals.cost_corrected_grid_only,
+                resolved_cost_basis, b"",
             )
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), title, report_row["created_at"], rows, settings
+                pool, str(report_id), title, report_row["created_at"], rows, settings,
+                resolved_cost_basis,
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(
@@ -701,7 +750,10 @@ async def _generate_report(
 async def api_create_report(body: ReportGenerateIn):
     pool = get_pool()
     try:
-        return await _generate_report(pool, body.title, body.session_ids, body.columns, body.price_overrides)
+        return await _generate_report(
+            pool, body.title, body.session_ids, body.columns, body.price_overrides,
+            body.cost_basis,
+        )
     except ReportBuildError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

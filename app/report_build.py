@@ -35,12 +35,27 @@ COLUMN_LABELS: dict[str, str] = {
     "meter_start": "Zähler Beginn",
     "meter_end": "Zähler Ende",
     "cost": "Kosten",
+    # The absolute grid-imported kWh this session's "Kosten" was actually
+    # priced against when cost_basis="corrected_grid_only" -- optional,
+    # selectable column so a report using grid-only pricing can show its
+    # own math (energy_kwh * power_source_grid_pct/100) instead of a
+    # number that looks unexplained next to "Energie" (the total).
+    "grid_energy": "Netzbezug (kWh)",
     "price_basis": "Preisbasis",
 }
 
 DEFAULT_COLUMNS: list[str] = list(COLUMN_LABELS)
 
-COST_BASES = ("openwb", "corrected")
+COST_BASES = ("openwb", "corrected", "corrected_grid_only")
+
+# German label for ReportMeta's "Kostenbasis" meta line -- report_pdf.html
+# and report_review.html's Bisherige-Berichte table both need this, kept
+# here (not duplicated) since COST_BASES already lives in this module.
+COST_BASIS_LABELS: dict[str, str] = {
+    "openwb": "openWB-Wert",
+    "corrected": "Korrigiert (gesamt)",
+    "corrected_grid_only": "Korrigiert (nur Netzbezug)",
+}
 
 
 class ReportBuildError(ValueError):
@@ -53,6 +68,7 @@ class SessionRow:
     cells: dict[str, str]  # column key -> formatted display string, for the selected columns only
     cost_openwb: float | None
     cost_corrected: float | None
+    cost_corrected_grid_only: float | None
     cost_used: float | None
     cost: float | None  # whichever of the above matches this build's cost_basis
     energy_kwh: float | None
@@ -78,12 +94,13 @@ class ReportTotals:
     energy_kwh: float
     energy_discharged_kwh: float
     range_charged_km: float
-    # Both raw totals are always computed and stored (audit trail, and the
-    # `reports` table's own NOT NULL columns) even though only one of them
-    # -- `cost`/`cost_display`, matching this build's cost_basis -- is what
-    # the template actually prints.
+    # All three raw totals are always computed and stored (audit trail,
+    # and the `reports` table's own NOT NULL columns) even though only one
+    # of them -- `cost`/`cost_display`, matching this build's cost_basis --
+    # is what the template actually prints.
     cost_openwb: float
     cost_corrected: float
+    cost_corrected_grid_only: float
     cost: float
     duration_display: str
     energy_display: str
@@ -91,6 +108,7 @@ class ReportTotals:
     range_display: str
     cost_openwb_display: str
     cost_corrected_display: str
+    cost_corrected_grid_only_display: str
     cost_display: str
 
 
@@ -149,10 +167,29 @@ def _validate_columns(columns: list[str] | None) -> list[str]:
 def _resolve_cost(session: dict, cost_basis: str) -> float | None:
     if cost_basis == "openwb":
         return session.get("cost_openwb")
+    if cost_basis == "corrected_grid_only":
+        # Same fallback-to-openWB completeness guarantee as "corrected"
+        # below, just against the grid-only figure.
+        return session.get("cost_used_grid_only")
     # "corrected": cost_used already carries decide_price's own fallback to
     # openWB's value when no price entry applies, so this is always a
     # complete figure, never silently blank for an unpriced session.
     return session.get("cost_used")
+
+
+def _grid_energy_kwh(session: dict) -> float | None:
+    """The absolute grid-imported kWh this session's cost_corrected_grid_only
+    was actually priced against -- energy_kwh * power_source_grid_pct/100,
+    same missing-data fallback as decide_price (grid_pct is None -> assume
+    100% grid). Purely a display helper for the "Netzbezug (kWh)" column;
+    not stored anywhere, computed fresh from fields already on the session
+    dict."""
+    energy = session.get("energy_kwh")
+    if energy is None:
+        return None
+    grid_pct = session.get("power_source_grid_pct")
+    grid_share = (grid_pct if grid_pct is not None else 100.0) / 100.0
+    return energy * grid_share
 
 
 def _build_cells(session: dict, columns: list[str], cost: float | None) -> dict[str, str]:
@@ -170,6 +207,7 @@ def _build_cells(session: dict, columns: list[str], cost: float | None) -> dict[
         "meter_start": _fmt_number(session.get("meter_start_kwh"), 2, " kWh"),
         "meter_end": _fmt_number(session.get("meter_end_kwh"), 2, " kWh"),
         "cost": _fmt_cost(cost),
+        "grid_energy": _fmt_number(_grid_energy_kwh(session), 2, " kWh"),
         "price_basis": price_entry["provider"] if price_entry else "kein Preis hinterlegt",
     }
     return {c: values[c] for c in columns}
@@ -206,6 +244,7 @@ def build(
     total_range = 0.0
     total_cost_openwb = 0.0
     total_cost_corrected = 0.0
+    total_cost_corrected_grid_only = 0.0
 
     for s in sessions:
         price_entry = s.get("price_entry")
@@ -231,6 +270,7 @@ def build(
             cells=_build_cells(s, cols, cost),
             cost_openwb=s.get("cost_openwb"),
             cost_corrected=s.get("cost_corrected"),
+            cost_corrected_grid_only=s.get("cost_corrected_grid_only"),
             cost_used=s.get("cost_used"),
             cost=cost,
             energy_kwh=s.get("energy_kwh"),
@@ -246,13 +286,20 @@ def build(
         total_energy_discharged += s.get("energy_discharged_kwh") or 0.0
         total_range += s.get("range_charged_km") or 0.0
         total_cost_openwb += s.get("cost_openwb") or 0.0
-        # cost_used already carries decide_price's own fallback (corrected,
-        # or openWB's own value when no price entry applies) -- summing it
-        # keeps this total always complete and comparable to
-        # total_cost_openwb, rather than silently excluding unpriced rows.
+        # cost_used/cost_used_grid_only already carry decide_price's own
+        # fallback (corrected, or openWB's own value when no price entry
+        # applies) -- summing them keeps these totals always complete and
+        # comparable to total_cost_openwb, rather than silently excluding
+        # unpriced rows.
         total_cost_corrected += s.get("cost_used") or 0.0
+        total_cost_corrected_grid_only += s.get("cost_used_grid_only") or 0.0
 
-    total_cost = total_cost_openwb if cost_basis == "openwb" else total_cost_corrected
+    if cost_basis == "openwb":
+        total_cost = total_cost_openwb
+    elif cost_basis == "corrected_grid_only":
+        total_cost = total_cost_corrected_grid_only
+    else:
+        total_cost = total_cost_corrected
 
     totals = ReportTotals(
         duration_seconds=total_duration,
@@ -261,6 +308,7 @@ def build(
         range_charged_km=total_range,
         cost_openwb=total_cost_openwb,
         cost_corrected=total_cost_corrected,
+        cost_corrected_grid_only=total_cost_corrected_grid_only,
         cost=total_cost,
         duration_display=_fmt_duration(total_duration),
         energy_display=_fmt_number(total_energy, 2, " kWh"),
@@ -268,6 +316,7 @@ def build(
         range_display=_fmt_number(total_range, 0, " km"),
         cost_openwb_display=_fmt_cost(total_cost_openwb),
         cost_corrected_display=_fmt_cost(total_cost_corrected),
+        cost_corrected_grid_only_display=_fmt_cost(total_cost_corrected_grid_only),
         cost_display=_fmt_cost(total_cost),
     )
 

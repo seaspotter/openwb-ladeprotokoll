@@ -104,6 +104,7 @@ try {
           <th>Beginn</th><th>Quelle</th><th>Fahrzeug</th><th>Ladepunkt</th>
           <th class="numeric">Energie</th><th class="numeric">Kosten (openWB)</th>
           <th>Preis</th><th class="numeric">Kosten (verwendet)</th>
+          <th class="numeric">Kosten (Netzbezug)</th>
         </tr>
       </thead>
       <tbody id="sessions-body"></tbody>
@@ -223,6 +224,7 @@ async function loadSessions() {
       <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_openwb, 2, ' €')}</td>
       <td>${priceLabel}</td>
       <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_used, 2, ' €')}</td>
+      <td class="numeric">${fmtNum(s.cost_used_grid_only, 2, ' €')}</td>
     `;
     body.appendChild(tr);
   }
