@@ -167,6 +167,22 @@ open an issue or just start working if something here matters to you.
       just checkbox ones), consistent checkbox styling, and the
       auto-fetch time input styled to match every other input — fixed a
       real visual inconsistency from a user screenshot.
+- [x] CI: `.github/workflows/release.yml` publishes an actual GitHub
+      Release on every version tag push (notes pulled straight from
+      `CHANGELOG.md`'s matching `## [X.Y.Z]` section) — a plain
+      `git tag && git push --tags` only created the tag, so the repo's
+      Releases page kept showing an older version as "Latest" until
+      someone ran `gh release create` by hand, which is what happened
+      right after tagging v0.2.0.
+- [x] Self-update UI: `app/updater.py`'s `GET /api/update/version`/
+      `GET /api/update/check`/`POST /api/update` routes existed since
+      early on but had no UI. New "Update" panel in the Einstellungen
+      dialog (last panel), matching `openwb-logger`'s pattern: shows the
+      current version, "Nach Updates suchen"/"Update" buttons hidden
+      entirely (not just disabled) when `self_update_available()` is
+      `False` — a bind-mount-free, image-only deployment (Synology
+      Container Manager, say) that `git pull` has nothing to update in
+      place.
 
 ## Next
 
@@ -175,12 +191,3 @@ Nothing queued right now — see "Someday / maybe" below.
 ## Someday / maybe
 
 - [ ] Multi-currency support, if this is ever useful outside Germany/EUR.
-- [ ] Dynamische Stromtarife (variable/spot-price electricity tariffs) —
-      `price_entries.py`'s correction model is currently a flat €/kWh over
-      a validity date range, which doesn't fit a tariff that varies by
-      hour. Needs research before design: does openWB's own `data.costs`
-      per session already reflect the correct dynamic-tariff cost at charge
-      time (in which case a dynamic-tariff user may just want `cost_basis
-      = "openwb"` and no correction at all), or would this need per-hour
-      price data of its own? Raised by the user (2026-09-04) as a gap, not
-      yet scoped.

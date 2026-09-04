@@ -212,6 +212,16 @@
       <p class="muted" id="report-settings-result"></p>
     </div>
 
+    <div class="panel">
+      <h3>Update</h3>
+      <div class="inline" id="update-info" style="display: flex; align-items: center; gap: 8px;">
+        <span class="muted" id="update-commit" style="font-family: monospace;">–</span>
+        <button type="button" id="update-check">Nach Updates suchen</button>
+        <button type="button" id="update-btn">Update</button>
+      </div>
+      <p class="muted" id="update-msg"></p>
+    </div>
+
   </div>
 </dialog>
 
@@ -364,6 +374,69 @@ async function loadReportSettings() {
   document.getElementById('pv-price-per-kwh').value = settings.pv_price_per_kwh;
   document.getElementById('bat-price-per-kwh').value = settings.bat_price_per_kwh;
 }
+
+async function loadUpdateInfo() {
+  document.getElementById('update-msg').textContent = '';
+  const data = await api('/api/update/version');
+  document.getElementById('update-commit').textContent = data.current_commit || '–';
+  // Hidden, not just disabled, when there's no bind-mounted git checkout to
+  // update in place (e.g. a plain image-only deployment, like on Synology
+  // Container Manager) -- a permanently dead button is clutter, not a
+  // useful affordance to grey out.
+  document.getElementById('update-check').hidden = !data.available;
+  document.getElementById('update-btn').hidden = !data.available;
+}
+
+document.getElementById('update-check').addEventListener('click', async () => {
+  const msgEl = document.getElementById('update-msg');
+  msgEl.textContent = 'Suche nach Updates...';
+  const data = await api('/api/update/check');
+  msgEl.textContent = data.error
+    ? 'Prüfung fehlgeschlagen: ' + data.error
+    : data.update_available
+      ? `Update verfügbar (${data.current} → ${data.latest})`
+      : `Aktuell (${data.current})`;
+});
+
+async function waitForUpdateRestartThenReload() {
+  // docker-compose's `restart: unless-stopped` brings the process back
+  // within a second or two -- poll a cheap existing endpoint until it
+  // answers again, then reload so the (possibly also-updated) frontend
+  // gets refreshed too.
+  const msgEl = document.getElementById('update-msg');
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      if ((await fetch('/api/sources')).ok) { window.location.reload(); return; }
+    } catch (err) { /* still restarting */ }
+  }
+  msgEl.textContent = 'Startet noch... bitte in Kürze manuell neu laden.';
+}
+
+document.getElementById('update-btn').addEventListener('click', async () => {
+  if (!confirm('Neueste Version laden und die Anwendung jetzt neu starten?')) return;
+  const btn = document.getElementById('update-btn');
+  const msgEl = document.getElementById('update-msg');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Wird aktualisiert...';
+  try {
+    const result = await api('/api/update', { method: 'POST' });
+    if (!result.ok) {
+      msgEl.textContent = 'Update fehlgeschlagen: ' + result.message;
+      return;
+    }
+    if (result.restarting) {
+      msgEl.textContent = 'Startet neu...';
+      await waitForUpdateRestartThenReload();
+      return;
+    }
+    msgEl.textContent = result.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
 
 document.getElementById('toggle-add-source').addEventListener('click', () => {
   const form = document.getElementById('add-source-form');
@@ -545,6 +618,7 @@ document.querySelectorAll('[data-open-settings]').forEach((btn) => {
       await loadPrices();
       await loadVehicles();
       await loadReportSettings();
+      await loadUpdateInfo();
     }
     settingsModal.showModal();
   });

@@ -230,7 +230,13 @@ kam — monatlich oder jährlich zusammengefasst.
 
 ## Self-Update
 
+Unter Einstellungen → "Update" (letzter Bereich im Dialog) steht die
+aktuell installierte Version, sowie "Nach Updates suchen" und "Update".
 Sofern über `docker-compose.yml` eingebunden (siehe
-[DEPLOYMENT.md](DEPLOYMENT.md)), lässt sich die Anwendung ohne manuellen
-`git pull`/Rebuild aktualisieren — Details dort unter "Self-update from
-the UI".
+[DEPLOYMENT.md](DEPLOYMENT.md)), lässt sich die Anwendung so ohne
+manuellen `git pull`/Rebuild aktualisieren — Details dort unter
+"Self-update from the UI". Bei einer reinen Image-Installation ohne
+dieses Bind-Mount (z. B. auf Synology über Container Manager) erscheinen
+die beiden Buttons gar nicht erst, nur die aktuelle Version bleibt
+sichtbar — es gibt dort schlicht nichts, was `git pull` an Ort und Stelle
+aktualisieren könnte.

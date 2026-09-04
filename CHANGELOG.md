@@ -13,6 +13,15 @@ what that means in practice for this project.
   only created the tag itself, so the repo's Releases page kept showing
   an older version as "Latest" until someone ran `gh release create` by
   hand (caught right after tagging v0.2.0, which needed exactly that).
+- Self-update finally has a UI: a new "Update" panel in Einstellungen
+  (`app/updater.py`'s `GET /api/update/version`/`check`/`POST /api/update`
+  routes existed already but were never wired to anything) shows the
+  current version and lets you check for and pull an update, restarting
+  the app automatically -- same pattern as the sibling `openwb-logger`
+  project. On a plain image-only deployment with no bind-mounted git
+  checkout (Synology Container Manager, for example), the check/update
+  buttons don't appear at all, since there'd be nothing for `git pull` to
+  update in place.
 
 ## [0.2.0] - 2026-09-04
 

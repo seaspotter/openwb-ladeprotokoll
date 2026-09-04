@@ -365,7 +365,30 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/updater.py` — optional in-app self-update (`git pull` + process
   restart), identical pattern to `openwb-logger/app/updater.py`. Works
   because `docker-compose.yml` bind-mounts the repo onto the container's
-  `WORKDIR`.
+  `WORKDIR`. `self_update_available()` is `False` when `/app/.git` doesn't
+  exist — a plain image-only deployment with no bind-mount (Synology
+  Container Manager, say), where `git pull` has nothing to pull into.
+  `GET /api/update/version` (`get_current_version()`/`self_update_available()`,
+  cheap, local-only, safe to call on every settings-panel open),
+  `GET /api/update/check` (`git fetch` + compares HEAD against `@{u}`),
+  and `POST /api/update` (`git pull --ff-only` + a delayed `os._exit(0)`
+  so `restart: unless-stopped` brings the process back with the pulled
+  code — skips the restart if `requirements.txt`/`Dockerfile` changed,
+  since a new dependency needs an image rebuild, not just a process
+  restart) existed as routes in `web.py` from early on but had no UI
+  until 2026-09-04 — `_settings_modal.html`'s "Update" panel (last panel,
+  after Berichts-Einstellungen) wires them up, mirroring
+  `openwb-logger/app/templates/index.html`'s update section: current
+  version always shown (monospace `#update-commit`), "Nach Updates
+  suchen"/"Update" buttons `hidden` (not just disabled — a permanently
+  dead button is clutter) whenever `self_update_available()` is `False`,
+  and a confirm prompt (this project's own plain `confirm()`, not
+  openwb-logger's custom `showConfirm()` modal — kept consistent with the
+  `confirm()` this project's own delete buttons already use) before
+  actually pulling. After a successful update, `waitForUpdateRestartThenReload()`
+  polls the already-existing `GET /api/sources` (no dedicated `/api/status`
+  endpoint here, unlike openwb-logger) until the restarted process answers
+  again, then reloads the page.
 - `app/main.py` — app factory, lifespan (DB pool, starts/cancels the
   scheduler task, enters `mcp.session_manager.run()` since mounting
   `mcp_server.py`'s app disables its own built-in lifespan). Mounts
@@ -458,9 +481,10 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   previously the one input in the modal with no border/background/
   padding at all, plain browser default sitting next to styled siblings).
   Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
-  Berichts-Einstellungen (Fahrzeuge added between Preise and Verlauf
-  abrufen since both Preise and Fahrzeuge key off vehicle names — don't
-  reorder without reason). Source/price entry add-forms are collapsed
+  Berichts-Einstellungen, Update (Fahrzeuge added between Preise and
+  Verlauf abrufen since both Preise and Fahrzeuge key off vehicle names;
+  Update is last since it's app-wide maintenance, not report/session
+  configuration — don't reorder without reason). Source/price entry add-forms are collapsed
   behind a "+" icon button per panel, toggled via `el.hidden = !el.hidden`
   — **the modal's own `<style>` includes `[hidden] { display: none
   !important; }`**, needed because `.inline { display: flex }` (the

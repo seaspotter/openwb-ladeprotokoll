@@ -153,7 +153,7 @@ EXISTS` in `app/db.py`) — no separate migration step.
 
 ### Self-update from the UI
 
-An "Update" button in Einstellungen runs `git pull --ff-only` against the
+An "Update" button in Einstellungen → Update runs `git pull --ff-only` against the
 repo checkout, then restarts the process so it picks up the new code — no
 Docker socket, no image rebuild, no separate container involved. This
 works because `docker-compose.yml` bind-mounts the whole repo onto the
