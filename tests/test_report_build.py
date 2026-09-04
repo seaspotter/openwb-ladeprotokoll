@@ -22,9 +22,7 @@ def _price_entry(provider="Stadtwerke", price_per_kwh=0.30,
 def _session(id=1, energy_kwh=10.0, cost_openwb=3.0, price_entry=None,
              cost_corrected=None, cost_used=None, delta_flagged=False,
              time_charged_seconds=3600, energy_discharged_kwh=0.0, range_charged_km=50.0,
-             time_begin=datetime(2026, 8, 2, 8, 24, 55),
-             cost_corrected_grid_only=None, cost_used_grid_only=None,
-             power_source_grid_pct=None):
+             time_begin=datetime(2026, 8, 2, 8, 24, 55)):
     return {
         "id": id,
         "time_begin": time_begin,
@@ -42,12 +40,6 @@ def _session(id=1, energy_kwh=10.0, cost_openwb=3.0, price_entry=None,
         "cost_openwb": cost_openwb,
         "cost_corrected": cost_corrected,
         "cost_used": cost_used if cost_used is not None else (cost_corrected or cost_openwb),
-        "cost_corrected_grid_only": cost_corrected_grid_only,
-        "cost_used_grid_only": (
-            cost_used_grid_only if cost_used_grid_only is not None
-            else (cost_corrected_grid_only or cost_openwb)
-        ),
-        "power_source_grid_pct": power_source_grid_pct,
         "price_entry": price_entry,
         "delta_flagged": delta_flagged,
     }
@@ -140,45 +132,6 @@ def test_totals_cost_matches_openwb_basis_when_selected():
     data = build([s1, s2], cost_basis="openwb")
     assert data.totals.cost == pytest.approx(4.5)
     assert data.totals.cost_display == "4,50 €"
-
-
-def test_cost_column_uses_grid_only_basis_when_selected():
-    entry = _price_entry(price_per_kwh=0.30)
-    s = _session(
-        energy_kwh=10.0, cost_openwb=4.5, price_entry=entry,
-        cost_corrected=3.0, cost_used=3.0,
-        cost_corrected_grid_only=1.2, cost_used_grid_only=1.2,
-        power_source_grid_pct=40.0,
-    )
-    data = build([s], columns=["cost"], cost_basis="corrected_grid_only")
-    assert data.rows[0].cells["cost"] == "1,20 €"
-    assert data.rows[0].cost == pytest.approx(1.2)
-    # total-energy corrected figure is unaffected by which basis is active
-    assert data.rows[0].cost_corrected == pytest.approx(3.0)
-
-
-def test_totals_cost_matches_grid_only_basis_when_selected():
-    s1 = _session(id=1, cost_openwb=3.0, cost_used=2.0, cost_used_grid_only=0.8)
-    s2 = _session(id=2, cost_openwb=1.5, cost_used=1.0, cost_used_grid_only=0.4)
-    data = build([s1, s2], cost_basis="corrected_grid_only")
-    assert data.totals.cost == pytest.approx(1.2)
-    assert data.totals.cost_corrected_grid_only == pytest.approx(1.2)
-    assert data.totals.cost_display == "1,20 €"
-    # the other two totals are still tracked regardless of active basis
-    assert data.totals.cost_openwb == pytest.approx(4.5)
-    assert data.totals.cost_corrected == pytest.approx(3.0)
-
-
-def test_grid_energy_column_computed_from_energy_and_grid_pct():
-    s = _session(energy_kwh=10.0, power_source_grid_pct=40.0)
-    data = build([s], columns=["grid_energy"])
-    assert data.rows[0].cells["grid_energy"] == "4,00 kWh"
-
-
-def test_grid_energy_column_missing_pct_assumes_100_percent():
-    s = _session(energy_kwh=10.0, power_source_grid_pct=None)
-    data = build([s], columns=["grid_energy"])
-    assert data.rows[0].cells["grid_energy"] == "10,00 kWh"
 
 
 def test_totals_use_cost_used_not_raw_cost_corrected_for_corrected_total():

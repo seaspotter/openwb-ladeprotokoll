@@ -42,11 +42,7 @@ shipped and what's next.
   tool recomputes cost from kWh × price, compares it against openWB's own
   figure, and flags sessions where the two diverge — visible while
   reviewing which sessions to include in a report, though deliberately
-  not carried onto the final PDF itself. The correction can be priced
-  against a session's total energy, or only its grid-imported share (for
-  a reimbursement scenario where self-generated PV/battery energy
-  shouldn't count at the configured rate) — chosen consciously per report,
-  not a setting that could be left in the wrong state.
+  not carried onto the final PDF itself.
 - **Per-vehicle Kennzeichen (license plate)**: openWB itself has no such
   field, so it's recorded here and documented on every generated report.
 - **Audit-safe PDF reports**: review your sessions, toggle which of the 13

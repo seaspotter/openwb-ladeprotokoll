@@ -24,18 +24,12 @@ Fahrzeug, Ladepunkt und Zeitraum. Fahrzeug und Ladepunkt sind Auswahllisten
 die gewählte Quelle) statt Freitextfeldern — falsche Schreibweisen liefern
 so keine leeren Ergebnisse.
 
-Neben "Kosten (real)" (openWBs eigener Wert) steht der zum jeweiligen
-Ladevorgang passende Preis (oder "kein Preis hinterlegt") sowie "Kosten
-(korrigiert)", die tatsächlich verwendeten Kosten — weicht der
-korrigierte Preis spürbar vom realen Wert ab, sind beide Spalten rot
-hervorgehoben. Diese Hervorhebung dient nur der Prüfung hier und unter
-"Bericht erstellen" — im fertigen PDF selbst erscheint die Kosten-Spalte
-immer neutral, ohne rote Markierung.
-
-Die Netzbezug-Preiskorrektur (siehe "Bericht erstellen" weiter unten)
-taucht hier bewusst nicht als eigene Spalte auf — sie lässt sich weder
-filtern noch exportieren, sondern ist ausschließlich eine Kostenbasis-
-Wahl beim Erzeugen eines Berichts.
+Neben "Kosten (openWB)" steht der zum jeweiligen Ladevorgang passende
+Preis (oder "kein Preis hinterlegt") sowie die tatsächlich verwendeten
+Kosten — weicht der korrigierte Preis spürbar von openWBs eigenem Wert
+ab, sind beide Spalten rot hervorgehoben. Diese Hervorhebung dient nur der
+Prüfung hier und unter "Bericht erstellen" — im fertigen PDF selbst
+erscheint die Kosten-Spalte immer neutral, ohne rote Markierung.
 
 Unter dem Filter steht "Letzter Abruf: ..." mit Datum/Uhrzeit des
 zuletzt (automatisch oder manuell) erfolgreich abgerufenen Ladeprotokolls
@@ -124,19 +118,11 @@ unverändert). Dies ist die **einzige** Stelle, an der die PDF-Spalten
 gewählt werden — in "Bericht erstellen" selbst gibt es keine separate
 Auswahl mehr:
 
-- **PDF-Spalten** — welche Spalten im PDF erscheinen, darunter auch
-  "Netzbezug (kWh)": die tatsächlich aus dem Netz bezogene Energiemenge,
-  die einem Bericht mit Kostenbasis "Korrigiert (nur Netzbezug)"
-  zugrunde liegt — nützlich, damit ein solcher Bericht seine eigene
-  Berechnung dokumentiert.
-- **Kosten-Spalte zeigt** — die **Standard**-Kostenbasis für neue
-  Berichte: openWBs eigenen Wert, den korrigierten Preis auf die gesamte
-  Energie, oder den korrigierten Preis nur auf den Netzbezug-Anteil
-  (jeweils mit automatischem Fallback auf openWB, wenn kein Preis passt).
-  Es gibt nur eine "Kosten"-Spalte im PDF, keine mehreren nebeneinander.
-  Anders als bei den PDF-Spalten lässt sich diese Kostenbasis pro Bericht
-  in "Bericht erstellen" noch einmal bewusst übersteuern (siehe unten) —
-  dieser Wert hier ist nur die Vorbelegung.
+- **PDF-Spalten** — welche Spalten im PDF erscheinen.
+- **Kosten-Spalte zeigt** — ob das PDF pro Ladevorgang und in der Summe
+  openWBs eigenen Wert oder den korrigierten (mit automatischem Fallback
+  auf openWB, wenn kein Preis passt) zeigt. Es gibt nur eine "Kosten"-
+  Spalte im PDF, keine zwei nebeneinander.
 - **Ausrichtung** — Hochkant (Standard) oder Querformat. Bei vielen
   ausgewählten Spalten passt Hochkant u. U. nicht mehr sauber auf eine
   Seite — dann Querformat wählen.
@@ -156,28 +142,18 @@ Nicht vergessen: nach Änderungen unten **Speichern** klicken.
    Preis ("Automatisch (Anbieter)" oder "Automatisch (kein Preis)"); über
    das Dropdown lässt sich das für diesen einen Ladevorgang übersteuern:
    ein bestimmter Preis-Eintrag, oder "openWB-Wert verwenden" (keine
-   Korrektur für diese Zeile). Die "Kosten (korrigiert)"-Spalte und die
+   Korrektur für diese Zeile). Die "Kosten (verwendet)"-Spalte und die
    Summe darunter aktualisieren sich sofort.
 3. **Vorschau** — zeigt das Dokument in der Seite, ohne etwas zu
    speichern; beliebig oft wiederholbar.
-4. **Bericht erzeugen** — Titel eingeben (z. B. "August 2026"), bei Bedarf
-   die **Kostenbasis** für diesen einen Bericht umstellen (voreingestellt
-   mit dem Wert aus Berichts-Einstellungen, aber hier bewusst je Bericht
-   änderbar — z. B. ein Bericht mit "Korrigiert (nur Netzbezug)" für eine
-   Erstattung, ein anderer mit "Korrigiert (gesamt)" für die eigene
-   Übersicht), dann erzeugen. Das PDF steht danach über den angezeigten
-   Link sowie in "Bisherige Berichte" zur Verfügung. Der Dateiname beim
-   Herunterladen ist das Erzeugungsdatum plus "Ladeprotokoll" plus der
-   eingegebene Titel (z. B. "20260901 Ladeprotokoll August 2026.pdf").
-
-"Bisherige Berichte" zeigt zu jedem Bericht, welche Kostenbasis er
-tatsächlich verwendet hat ("Kostenbasis"-Spalte) — ein später erzeugter
-Bericht mit anderer Kostenbasis lässt sich so von einem älteren
-unterscheiden, ohne das PDF öffnen zu müssen.
+4. **Bericht erzeugen** — Titel eingeben (z. B. "August 2026") und
+   erzeugen. Das PDF steht danach über den angezeigten Link sowie in
+   "Bisherige Berichte" zur Verfügung. Der Dateiname beim Herunterladen ist
+   das Erzeugungsdatum plus "Ladeprotokoll" plus der eingegebene Titel
+   (z. B. "20260901 Ladeprotokoll August 2026.pdf").
 
 Welche Spalten im PDF erscheinen, wird ausschließlich unter Einstellungen
-→ Berichts-Einstellungen festgelegt (siehe oben) — nur die Kostenbasis
-selbst lässt sich zusätzlich pro Bericht übersteuern.
+→ Berichts-Einstellungen festgelegt (siehe oben).
 
 Im PDF selbst stehen die Ladevorgänge chronologisch aufsteigend
 (ältester zuerst, neuester unten), unabhängig von der Reihenfolge in der
