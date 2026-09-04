@@ -6,6 +6,23 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- MCP server at `/mcp` (`app/mcp_server.py`, `FastMCP`, Streamable HTTP
+  transport, same pattern as the sibling `openwb-logger` project):
+  `search_sessions` (source/vehicle/chargepoint/date filters, same price-
+  decision enrichment as `/api/sessions`) and `generate_report` (session
+  ids -> a real, immutable, persisted PDF report) tools, plus
+  `openwb://sources`/`openwb://report-columns` resources for discovering
+  valid parameter values. No new authentication -- same no-auth, LAN-trust
+  model as the web UI.
+
+### Changed
+- Dropped the standalone CSV-export roadmap item -- openWB's own UI
+  already offers a CSV export directly, no need to duplicate it here.
+- `web.py`'s session-query and report-generation logic extracted into
+  `_query_sessions`/`_generate_report` module functions, shared by the
+  HTTP routes and the new MCP tools rather than duplicated.
+
 ## [0.1.0] - 2026-09-04
 
 First release. Everything below shipped before this project had a

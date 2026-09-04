@@ -182,6 +182,25 @@ remote/branch and restart the process — not take over the host. Still, if
 the UI is reachable beyond your LAN, put it behind an authenticated
 reverse proxy.
 
+## MCP server (for AI assistants)
+
+The app also serves an [MCP](https://modelcontextprotocol.io) server at
+`/mcp` (Streamable HTTP transport), alongside the web UI, on the same
+port. It exposes two tools — `search_sessions` (source/vehicle/
+chargepoint/date-range filters, same price-decision enrichment as
+`/api/sessions`) and `generate_report` (session ids -> a real, immutable,
+persisted PDF report, same as "Bericht erzeugen" in the review UI) — and
+two resources, `openwb://sources` (valid source ids for `search_sessions`)
+and `openwb://report-columns` (valid column keys for `generate_report`).
+Point any MCP client (Claude Desktop, Claude Code, etc.) at
+`http://<host>:8080/mcp` — consult that client's own docs for how it wants
+an HTTP-transport server configured, since that varies by client.
+
+**No separate authentication** — same no-auth, LAN-trust model as the rest
+of the app (see below). This doesn't expose anything the web UI/API
+didn't already; an MCP client on the same network can read/generate
+exactly what a browser already could.
+
 ## Running behind a reverse proxy
 
 Plain HTTP app on one port, no WebSocket/SSE dependency — any standard

@@ -111,17 +111,27 @@ open an issue or just start working if something here matters to you.
       a fixed 24h-from-startup interval; the overview page now shows a
       persistent "Letzter Abruf" freshness indicator instead of a one-off
       post-click success toast.
+- [x] MCP server (`app/mcp_server.py`, `FastMCP`, Streamable HTTP
+      transport mounted at `/mcp` on the same app/port), mirroring
+      `openwb-logger`'s `/mcp`: `search_sessions`/`generate_report` tools
+      plus `openwb://sources`/`openwb://report-columns` resources, both
+      tools thin wrappers around `web.py`'s own `_query_sessions`/
+      `_generate_report` (extracted so the HTTP routes and MCP tools share
+      one implementation). Dropped the standalone CSV-export roadmap item
+      per explicit user feedback (2026-09-04) — openWB's own UI already
+      offers a CSV export directly, no need to duplicate it here.
 
 ## Next
 
-- [ ] CSV export of the currently selected sessions, alongside the PDF
+- [ ] Monthly/yearly statistics with a chart — total kWh, total cost, and
+      the PV/grid/battery/chargepoint share (the `power_source_*_pct`
+      columns already exist in `sessions`, unused for anything but display
+      today) aggregated over time, not just per-report totals. New page,
+      client-side charting (no server-rendered image needed since this
+      isn't part of the immutable PDF).
 
 ## Someday / maybe
 
-- [ ] MCP server (`search_sessions`/`generate_report` type tools),
-      mirroring `openwb-logger`'s `/mcp` — deliberately out of v1 scope,
-      wasn't requested and adds surface area before the core flow is even
-      done.
 - [ ] Multi-currency support, if this is ever useful outside Germany/EUR.
 - [ ] Dynamische Stromtarife (variable/spot-price electricity tariffs) —
       `price_entries.py`'s correction model is currently a flat €/kWh over
@@ -132,10 +142,3 @@ open an issue or just start working if something here matters to you.
       = "openwb"` and no correction at all), or would this need per-hour
       price data of its own? Raised by the user (2026-09-04) as a gap, not
       yet scoped.
-- [ ] Monthly/yearly statistics with a chart — total kWh, total cost, and
-      the PV/grid/battery/chargepoint share (the `power_source_*_pct`
-      columns already exist in `sessions`, unused for anything but display
-      today) aggregated over time, not just per-report totals. Would be a
-      new page, client-side charting (no server-rendered image needed
-      since this isn't part of the immutable PDF). Raised by the user
-      (2026-09-04) alongside the dynamic-tariff idea, not yet scoped.

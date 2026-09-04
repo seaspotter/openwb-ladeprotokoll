@@ -196,7 +196,13 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   or settings["default_columns"]` (not `report_build.py`'s own
   all-columns fallback) is what "no columns specified" actually falls back
   to, so an API caller that omits `columns` gets the user's configured
-  default, not every column.
+  default, not every column. `_query_sessions` (the actual query/filter/
+  price-decision logic behind `GET /api/sessions`) and `_generate_report`
+  (the actual build+persist logic behind `POST /api/reports`) are both
+  module-level functions the routes call rather than inlining directly —
+  `mcp_server.py`'s `search_sessions`/`generate_report` tools call the
+  exact same two functions, so there's one implementation of each, not a
+  second copy for MCP.
   `GET /api/vehicles` returns every vehicle name ever seen across all
   sources' sessions (`SELECT DISTINCT ... FROM sessions`), left-joined with
   its optional `vehicles.license_plate` — not just the rows that happen to
@@ -217,7 +223,24 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   because `docker-compose.yml` bind-mounts the repo onto the container's
   `WORKDIR`.
 - `app/main.py` — app factory, lifespan (DB pool, starts/cancels the
-  scheduler task).
+  scheduler task, enters `mcp.session_manager.run()` since mounting
+  `mcp_server.py`'s app disables its own built-in lifespan).
+- `app/mcp_server.py` — MCP server (`FastMCP`, Streamable HTTP transport)
+  mounted at `/mcp` on the same FastAPI app/port, identical pattern to
+  `openwb-logger/app/mcp_server.py`. Two tools: `search_sessions` and
+  `generate_report`, both thin wrappers around `web.py`'s own
+  `_query_sessions`/`_generate_report` helpers (extracted specifically so
+  both the HTTP routes and the MCP tools share one implementation, not
+  two copies of the same filtering/report-building logic) — the HTTP
+  route wraps `ReportBuildError` as a 400 `HTTPException`, the MCP tool
+  wraps both `ReportBuildError` *and* a leaked `HTTPException` (raised
+  directly by `_load_report_sessions` for an unknown session id) as a
+  plain `ValueError`, since a bare `HTTPException` with its `"404: "`
+  prefix has no business surfacing through the MCP boundary. Two
+  resources: `openwb://sources` and `openwb://report-columns`, for
+  discovering valid `search_sessions`/`generate_report` parameter values
+  without a separate HTTP round-trip. No new authentication — same
+  no-auth, LAN-trust model as the rest of the app.
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
   chargepoint are `<select>`s populated from the currently-loaded sessions,
@@ -316,7 +339,7 @@ the left where relevant (`← Übersicht`; `index.html` has none, it *is*
 everything else, no accent-filled "primary" style (see
 `_settings_modal.html` above); `report_review.html`'s own in-page "Bericht
 erzeugen" button is styled the same way.
-- An MCP endpoint — deliberately deferred past v1, see `ROADMAP.md`.
+- An MCP endpoint at `/mcp` — see `app/mcp_server.py` above.
 
 Storage is Postgres only. Reports, once generated, are immutable — the
 rendered PDF bytes and a frozen JSONB snapshot of every included session

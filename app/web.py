@@ -281,14 +281,16 @@ async def api_backfill(source_id: int, body: BackfillIn):
     return {"ok": True, "sessions_upserted": result.sessions_upserted}
 
 
-@router.get("/api/sessions")
-async def api_sessions(
+async def _query_sessions(
+    pool,
     source_id: int | None = None,
     vehicle: str | None = None,
     chargepoint: str | None = None,
     from_: date | None = None,
     to: date | None = None,
-):
+) -> list[dict]:
+    """Shared by the /api/sessions HTTP route and the MCP search_sessions
+    tool (mcp_server.py) -- same filters, same price-decision enrichment."""
     clauses = []
     params: list = []
 
@@ -308,7 +310,6 @@ async def api_sessions(
         add("time_begin::date <= ${}", to)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
-    pool = get_pool()
     rows = await pool.fetch(
         f"SELECT * FROM sessions {where} ORDER BY time_begin DESC", *params
     )
@@ -339,6 +340,19 @@ async def api_sessions(
         d["cost_delta"] = decision.delta
         d["cost_delta_flagged"] = decision.delta_flagged
         sessions.append(d)
+    return sessions
+
+
+@router.get("/api/sessions")
+async def api_sessions(
+    source_id: int | None = None,
+    vehicle: str | None = None,
+    chargepoint: str | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+):
+    pool = get_pool()
+    sessions = await _query_sessions(pool, source_id, vehicle, chargepoint, from_, to)
     return {"sessions": sessions}
 
 
@@ -582,21 +596,20 @@ async def api_report_preview(body: ReportBuildIn):
     return render_html(data, meta)
 
 
-@router.post("/api/reports")
-async def api_create_report(body: ReportGenerateIn):
-    """Reports are immutable once created -- "regenerate" always inserts a
-    new row rather than updating an existing one. Insert happens in two
-    steps because the PDF's own header/footer displays the report's id,
-    which only exists once the row is inserted."""
-    pool = get_pool()
+async def _generate_report(
+    pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict
+) -> dict:
+    """Builds and persists an immutable report -- shared by the
+    POST /api/reports HTTP route and the MCP generate_report tool
+    (mcp_server.py). Reports are immutable once created -- "regenerate"
+    always inserts a new row rather than updating an existing one. Insert
+    happens in two steps because the PDF's own header/footer displays the
+    report's id, which only exists once the row is inserted. Raises
+    ReportBuildError (caller decides how to surface it: HTTPException for
+    the HTTP route, a plain exception for the MCP tool)."""
     settings = await get_report_settings(pool)
-    sessions, rows = await _load_report_sessions(pool, body.session_ids, body.price_overrides)
-    try:
-        data = build_report_data(
-            sessions, body.columns or settings["default_columns"], settings["cost_basis"]
-        )
-    except ReportBuildError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    sessions, rows = await _load_report_sessions(pool, session_ids, price_overrides)
+    data = build_report_data(sessions, columns or settings["default_columns"], settings["cost_basis"])
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -605,7 +618,7 @@ async def api_create_report(body: ReportGenerateIn):
                 "total_energy_kwh, total_energy_discharged_kwh, total_range_charged_km, "
                 "total_cost_openwb, total_cost_corrected, pdf_data) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at",
-                body.title, data.columns, data.totals.duration_seconds,
+                title, data.columns, data.totals.duration_seconds,
                 data.totals.energy_kwh, data.totals.energy_discharged_kwh,
                 data.totals.range_charged_km, data.totals.cost_openwb,
                 data.totals.cost_corrected, b"",
@@ -613,7 +626,7 @@ async def api_create_report(body: ReportGenerateIn):
             report_id = report_row["id"]
 
             meta = await _report_meta(
-                pool, str(report_id), body.title, report_row["created_at"], rows, settings
+                pool, str(report_id), title, report_row["created_at"], rows, settings
             )
             pdf_bytes = render_pdf(data, meta)
             await conn.execute(
@@ -634,6 +647,15 @@ async def api_create_report(body: ReportGenerateIn):
 
     row = await pool.fetchrow(f"{_REPORT_SUMMARY_SELECT} WHERE r.id = $1", report_id)
     return _report_summary_row(row)
+
+
+@router.post("/api/reports")
+async def api_create_report(body: ReportGenerateIn):
+    pool = get_pool()
+    try:
+        return await _generate_report(pool, body.title, body.session_ids, body.columns, body.price_overrides)
+    except ReportBuildError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/reports")

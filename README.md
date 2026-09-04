@@ -54,6 +54,9 @@ shipped and what's next.
 - **Optional in-app self-update**, same pattern as the sibling
   [openwb-logger](https://github.com/seaspotter/openwb-logger) project —
   see [DEPLOYMENT.md](DEPLOYMENT.md).
+- **MCP server** at `/mcp` for AI assistants — `search_sessions` and
+  `generate_report`, same data and same no-auth trust model as the web
+  UI — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## How it works
 
