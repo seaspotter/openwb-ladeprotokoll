@@ -416,7 +416,17 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `ReportBuildIn.cost_basis`) — an AI assistant generating a report can
   ask for `"openwb"` explicitly, same as picking it from the dropdown in
   `report_review.html`. No new authentication — same no-auth, LAN-trust
-  model as the rest of the app.
+  model as the rest of the app. `FastMCP(...)` explicitly passes
+  `transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)`
+  — without it, `FastMCP()` auto-enables a Host-header allowlist covering
+  only `localhost`/`127.0.0.1`/`::1` (its own unused-here `host` param
+  defaults to `"127.0.0.1"`, an assumption that it's running standalone on
+  loopback rather than mounted inside another app), rejecting every real
+  LAN request to `/mcp` with a raw 421 "Invalid Host header" — confirmed
+  live as an actual bug in the sibling `openwb-logger` project
+  (`mcp==1.29.0`, same mounted-inside-FastAPI pattern) and fixed here the
+  same way before it ever shipped, since this project has the identical
+  setup.
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
   chargepoint are `<select>`s populated from the currently-loaded sessions,

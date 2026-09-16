@@ -6,6 +6,20 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Fixed
+- The `/mcp` endpoint rejected every request from a real LAN address with
+  a raw 421 "Invalid Host header". Cause: `FastMCP()` auto-enables
+  DNS-rebinding Host-header protection whenever `transport_security`
+  isn't explicitly passed and its own (otherwise unused) `host`
+  constructor param defaults to `"127.0.0.1"`, allowlisting only
+  `localhost`/`127.0.0.1`/`::1` -- a default that assumes FastMCP is
+  running its own standalone server bound to loopback, not mounted inside
+  another app and reached over the LAN like every other route here.
+  Explicitly disabled to match this project's existing no-auth-by-default,
+  LAN-trust model. Caught and fixed first in the sibling `openwb-logger`
+  project (identical setup, `mcp==1.29.0`), applied here before it ever
+  shipped in a release.
+
 ## [0.3.0] - 2026-09-04
 
 ### Added

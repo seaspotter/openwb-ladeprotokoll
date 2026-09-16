@@ -201,6 +201,14 @@ of the app (see below). This doesn't expose anything the web UI/API
 didn't already; an MCP client on the same network can read/generate
 exactly what a browser already could.
 
+**A client getting a raw `421 Invalid Host header`** when connecting was
+a real bug (fixed): the underlying MCP library auto-enables a Host-header
+allowlist covering only `localhost`/`127.0.0.1`, which rejects any real
+LAN address a client actually connects through. Fixed in `mcp_server.py`
+by explicitly disabling it, matching this app's own no-auth/LAN-trust
+model — if you're hitting this, update to a version with the fix rather
+than working around it client-side.
+
 ## Running behind a reverse proxy
 
 Plain HTTP app on one port, no WebSocket/SSE dependency — any standard
