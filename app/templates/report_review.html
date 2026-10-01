@@ -91,8 +91,18 @@ try {
           hx-get="/hx/report-review/sessions" hx-target="#sessions-body" hx-swap="innerHTML"
           hx-trigger="submit, load"
           hx-on::after-request="document.getElementById('select-all').checked = true">
-      <select id="filter-source" name="source_id"><option value="">Alle Quellen</option></select>
-      <select id="filter-vehicle" name="vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="filter-source" name="source_id"
+              hx-get="/hx/filters/sources" hx-trigger="load"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Quellen</option>
+      </select>
+      <select id="filter-vehicle" name="vehicle"
+              hx-get="/hx/filters/vehicle-chargepoint"
+              hx-trigger="load, change from:#filter-source"
+              hx-include="#filter-source, #filter-vehicle, #filter-chargepoint"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Fahrzeuge</option>
+      </select>
       <select id="filter-chargepoint" name="chargepoint"><option value="">Alle Ladepunkte</option></select>
       <input type="date" id="filter-from" name="from_">
       <input type="date" id="filter-to" name="to">
@@ -151,44 +161,6 @@ try {
 </main>
 {% include "_settings_modal.html" %}
 <script>
-async function loadSourceFilter() {
-  const { sources } = await api('/api/sources');
-  const select = document.getElementById('filter-source');
-  for (const s of sources) {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.name;
-    select.appendChild(opt);
-  }
-}
-
-function populateSelect(select, values, placeholder) {
-  const current = select.value;
-  select.innerHTML = `<option value="">${placeholder}</option>`;
-  for (const v of values) {
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
-    select.appendChild(opt);
-  }
-  select.value = current;
-}
-
-async function loadVehicleAndChargepointFilters() {
-  const params = new URLSearchParams();
-  const sourceId = document.getElementById('filter-source').value;
-  if (sourceId) params.set('source_id', sourceId);
-  const { sessions: all } = await api('/api/sessions?' + params.toString());
-  const vehicles = [...new Set(all.map((s) => s.vehicle_name).filter(Boolean))].sort();
-  const chargepoints = [...new Set(all.map((s) => s.chargepoint_name).filter(Boolean))].sort();
-  populateSelect(document.getElementById('filter-vehicle'), vehicles, 'Alle Fahrzeuge');
-  populateSelect(document.getElementById('filter-chargepoint'), chargepoints, 'Alle Ladepunkte');
-}
-
-document.getElementById('filter-source').addEventListener('change', () => {
-  loadVehicleAndChargepointFilters();
-});
-
 // "Alle"/none toggle for the session table -- the table itself re-renders
 // via its own hx-post on "change" (see the <tbody>'s hx-trigger), so this
 // just flips every row's checkbox and lets that bubble into one request.
@@ -242,8 +214,6 @@ document.getElementById('preview-btn').addEventListener('click', async () => {
 (async function init() {
   const reportSettings = await api('/api/report-settings');
   document.getElementById('report-cost-basis').value = reportSettings.cost_basis;
-  await loadSourceFilter();
-  await loadVehicleAndChargepointFilters();
 })();
 </script>
 </body>

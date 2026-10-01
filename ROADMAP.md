@@ -192,14 +192,20 @@ open an issue or just start working if something here matters to you.
       reusing the exact price-decision logic report generation itself
       uses), and Statistik (the two Chart.js charts via an embedded-JSON
       + trailing-inline-`<script>` pattern, since a canvas draw isn't a
-      DOM swap). Residual plain JS only where it genuinely doesn't fit:
-      the Update panel's restart-poll, report-review's "Vorschau"
-      (renders into an iframe, nothing to swap), and dropdown-population
-      conveniences. Each phase shipped as its own commit with a full
-      pytest + pgserver-integration + Playwright verification pass before
-      moving to the next, catching two real bugs along the way (a 422 on
-      empty filter fields, a checkbox/time-input state leak) that
-      wouldn't have surfaced without actually exercising the browser.
+      DOM swap), then a fifth pass converting the three pages' own
+      source/vehicle/chargepoint filter dropdowns too (`GET
+      /hx/filters/...`) — the one category left over after the first
+      four phases, now gone, leaving genuinely zero JS-populated
+      `<select>`s anywhere in the app. Residual plain JS only where it
+      genuinely doesn't fit: the Update panel's restart-poll and
+      report-review's "Vorschau" (renders into an iframe, nothing to
+      swap). Each phase shipped as its own commit with a full pytest +
+      pgserver-integration + Playwright verification pass before moving
+      to the next, catching real bugs along the way that wouldn't have
+      surfaced without actually exercising the browser (a 422 on empty
+      filter fields, a checkbox/time-input state leak, and a `<select>`
+      inheriting its enclosing form's `hx-target` instead of defaulting
+      to itself).
 
 ## Next
 

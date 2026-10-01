@@ -43,8 +43,24 @@ what that means in practice for this project.
   fetching or building table/stat-card HTML in JS, and no more tracked
   chart instances to `.destroy()` between renders, since the whole
   fragment (canvases included) replaces as one unit each time.
+- The three pages' own filter dropdowns (source/vehicle/chargepoint)
+  are now htmx-driven too, completing full htmx conversion with no
+  remaining JS-populated `<select>`s -- `GET /hx/filters/sources`
+  (shared by all three pages), `GET /hx/filters/vehicles` (Statistik's
+  unfiltered vehicle list), and `GET /hx/filters/vehicle-chargepoint`
+  (Übersicht's/Bericht-erstellen's source-narrowed vehicle+chargepoint
+  pair, one request updating both selects via `hx-swap-oob`) replace
+  `loadSourceFilter()`/`loadVehicleFilter()`/
+  `loadVehicleAndChargepointFilters()`/`onSourcesChanged()`/
+  `updateLastFetchDisplay()`/`populateSelect()` everywhere.
 
 ### Fixed
+- A `<select>` nested inside a form with its own `hx-target` inherits
+  that target instead of defaulting to itself -- the new filter
+  dropdowns above initially (silently, no console error) swapped their
+  own responses into the surrounding form's target element instead of
+  their own `<option>`s. Fixed by adding an explicit `hx-target="this"`
+  to each one; caught via Playwright before this ever shipped.
 - `price_entries.decide_price` recomputed its own cost breakdown a
   second time in `web.py` just to get the per-source components --
   `PriceDecision` now carries the `CostBreakdown` it already computed

@@ -88,8 +88,18 @@ try {
     <form class="inline" id="filter-form"
           hx-get="/hx/sessions" hx-target="#sessions-panel" hx-swap="innerHTML"
           hx-trigger="submit, sources-changed from:body, load">
-      <select id="filter-source" name="source_id"><option value="">Alle Quellen</option></select>
-      <select id="filter-vehicle" name="vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="filter-source" name="source_id"
+              hx-get="/hx/filters/sources?with_freshness=1" hx-trigger="load, sources-changed from:body"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Quellen</option>
+      </select>
+      <select id="filter-vehicle" name="vehicle"
+              hx-get="/hx/filters/vehicle-chargepoint"
+              hx-trigger="load, change from:#filter-source, sources-changed from:body"
+              hx-include="#filter-source, #filter-vehicle, #filter-chargepoint"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Fahrzeuge</option>
+      </select>
       <select id="filter-chargepoint" name="chargepoint"><option value="">Alle Ladepunkte</option></select>
       <input type="date" id="filter-from" name="from_">
       <input type="date" id="filter-to" name="to">
@@ -104,90 +114,5 @@ try {
   </div>
 </main>
 {% include "_settings_modal.html" %}
-<script>
-function fmtDateTime(iso) {
-  if (!iso) return '–';
-  return new Date(iso).toLocaleString('de-DE');
-}
-
-function populateSelect(select, values, placeholder) {
-  const current = select.value;
-  select.innerHTML = `<option value="">${placeholder}</option>`;
-  for (const v of values) {
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
-    select.appendChild(opt);
-  }
-  select.value = current;
-}
-
-// Re-fetches and rebuilds the filter dropdown + freshness display --
-// called at init and whenever the Einstellungen modal's Quellen panel
-// changes sources (via the "sources-changed" HX-Trigger event), so this
-// page stays in sync without a full reload. The session table itself
-// refreshes independently (the filter form's own hx-trigger listens for
-// "sources-changed" too).
-async function onSourcesChanged() {
-  const { sources } = await api('/api/sources');
-  const select = document.getElementById('filter-source');
-  const current = select.value;
-  select.innerHTML = '<option value="">Alle Quellen</option>';
-  for (const s of sources) {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.name;
-    select.appendChild(opt);
-  }
-  select.value = current;
-  updateLastFetchDisplay(sources);
-}
-
-// Shows the most recent last_fetch_at across all sources (not just the
-// ones touched by a click of "Jetzt abrufen") -- a persistent freshness
-// indicator, more useful than a transient "N Quelle(n) erfolgreich
-// abgerufen" toast that says nothing once the page has been open a while.
-function updateLastFetchDisplay(sources) {
-  const resultEl = document.getElementById('fetch-result');
-  const timestamps = sources.map((s) => s.last_fetch_at).filter(Boolean);
-  if (timestamps.length === 0) {
-    resultEl.textContent = 'Noch kein Abruf erfolgt.';
-    return;
-  }
-  const latest = timestamps.reduce((a, b) => (a > b ? a : b));
-  const failed = sources.filter((s) => s.enabled && s.last_fetch_status && s.last_fetch_status !== 'ok').length;
-  resultEl.textContent = failed === 0
-    ? `Letzter Abruf: ${fmtDateTime(latest)}`
-    : `Letzter Abruf: ${fmtDateTime(latest)} (${failed} Quelle(n) zuletzt fehlgeschlagen -- Details unter "⚙ Einstellungen")`;
-}
-
-async function loadVehicleAndChargepointFilters() {
-  // Populated from every session regardless of the vehicle/chargepoint
-  // filter itself (chicken-and-egg), but respecting the source filter so
-  // the dropdowns don't offer vehicles/Ladepunkte from a different source.
-  const params = new URLSearchParams();
-  const sourceId = document.getElementById('filter-source').value;
-  if (sourceId) params.set('source_id', sourceId);
-  const { sessions: all } = await api('/api/sessions?' + params.toString());
-  const vehicles = [...new Set(all.map((s) => s.vehicle_name).filter(Boolean))].sort();
-  const chargepoints = [...new Set(all.map((s) => s.chargepoint_name).filter(Boolean))].sort();
-  populateSelect(document.getElementById('filter-vehicle'), vehicles, 'Alle Fahrzeuge');
-  populateSelect(document.getElementById('filter-chargepoint'), chargepoints, 'Alle Ladepunkte');
-}
-
-document.getElementById('filter-source').addEventListener('change', () => {
-  loadVehicleAndChargepointFilters();
-});
-
-document.body.addEventListener('sources-changed', async () => {
-  await onSourcesChanged();
-  await loadVehicleAndChargepointFilters();
-});
-
-(async function init() {
-  await onSourcesChanged();
-  await loadVehicleAndChargepointFilters();
-})();
-</script>
 </body>
 </html>

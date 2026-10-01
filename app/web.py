@@ -643,6 +643,94 @@ async def api_sessions(
     return {"sessions": sessions}
 
 
+# ---------------------------------------------------------------------------
+# htmx fragment routes for the three pages' own filter dropdowns (source/
+# vehicle/chargepoint <select>s) -- shared across index.html,
+# report_review.html, statistik.html, since all three populate the same
+# "Alle Quellen" source select the same way.
+# ---------------------------------------------------------------------------
+
+async def _distinct_values(pool, column: str, source_id: int | None) -> list[str]:
+    """column is always one of the two hardcoded literals below, never
+    request input, so building the query with an f-string is safe here."""
+    query = f"SELECT DISTINCT {column} FROM sessions WHERE {column} IS NOT NULL"
+    params = []
+    if source_id is not None:
+        query += " AND source_id = $1"
+        params.append(source_id)
+    query += f" ORDER BY {column}"
+    rows = await pool.fetch(query, *params)
+    return [r[column] for r in rows]
+
+
+@router.get("/hx/filters/sources", response_class=HTMLResponse)
+async def hx_filter_sources(request: Request, with_freshness: str | None = None):
+    """Shared "Alle Quellen" <select> options. `with_freshness` additionally
+    renders an hx-swap-oob update for index.html's #fetch-result line --
+    only index.html passes it; report_review.html/statistik.html don't have
+    that element, and htmx logs an oobErrorNoTarget console error for an
+    oob fragment with no matching target, so this is opt-in, not harmlessly
+    ignored."""
+    pool = get_pool()
+    rows = await pool.fetch("SELECT * FROM sources ORDER BY name")
+    sources = [_source_row(r) for r in rows]
+    freshness = None
+    if with_freshness:
+        timestamps = [s["last_fetch_at"] for s in sources if s["last_fetch_at"]]
+        if not timestamps:
+            freshness = "Noch kein Abruf erfolgt."
+        else:
+            latest = max(timestamps)
+            failed = sum(
+                1 for s in sources
+                if s["enabled"] and s["last_fetch_status"] and s["last_fetch_status"] != "ok"
+            )
+            freshness = f"Letzter Abruf: {_fmt_dt_de(datetime.fromisoformat(latest))}"
+            if failed:
+                freshness += (
+                    f" ({failed} Quelle(n) zuletzt fehlgeschlagen -- "
+                    'Details unter "⚙ Einstellungen")'
+                )
+    return templates.TemplateResponse(
+        "hx/filters/sources.html", {"request": request, "sources": sources, "freshness": freshness},
+    )
+
+
+@router.get("/hx/filters/vehicles", response_class=HTMLResponse)
+async def hx_filter_vehicles(request: Request):
+    """Every distinct vehicle name ever seen, unfiltered -- statistik.html's
+    vehicle filter isn't chained off the source filter the way
+    index.html's/report_review.html's are."""
+    vehicles = await _distinct_values(get_pool(), "vehicle_name", None)
+    return templates.TemplateResponse(
+        "hx/filters/vehicles.html", {"request": request, "vehicles": vehicles},
+    )
+
+
+@router.get("/hx/filters/vehicle-chargepoint", response_class=HTMLResponse)
+async def hx_filter_vehicle_chargepoint(
+    request: Request,
+    source_id: str | None = None, vehicle: str | None = None, chargepoint: str | None = None,
+):
+    """index.html/report_review.html: vehicle/chargepoint options narrowed
+    to the currently-selected source. One request renders both selects
+    (chargepoint via hx-swap-oob) since both depend on the same source
+    filter. `vehicle`/`chargepoint` are the selects' own current values
+    (re-included on every request) so a still-valid selection survives a
+    source change instead of silently resetting to "Alle"."""
+    pool = get_pool()
+    sid = int(source_id) if source_id else None
+    vehicles = await _distinct_values(pool, "vehicle_name", sid)
+    chargepoints = await _distinct_values(pool, "chargepoint_name", sid)
+    return templates.TemplateResponse(
+        "hx/filters/vehicle_chargepoint.html",
+        {
+            "request": request, "vehicles": vehicles, "chargepoints": chargepoints,
+            "selected_vehicle": vehicle, "selected_chargepoint": chargepoint,
+        },
+    )
+
+
 @router.get("/hx/sessions", response_class=HTMLResponse)
 async def hx_sessions(
     request: Request,

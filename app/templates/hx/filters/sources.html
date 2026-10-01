@@ -1,0 +1,7 @@
+<option value="">Alle Quellen</option>
+{% for s in sources %}
+<option value="{{ s.id }}">{{ s.name }}</option>
+{% endfor %}
+{% if freshness is not none %}
+<p class="muted" id="fetch-result" hx-swap-oob="true">{{ freshness }}</p>
+{% endif %}

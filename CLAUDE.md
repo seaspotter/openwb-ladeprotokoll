@@ -457,13 +457,43 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   whole form including empty/unselected fields as `""`, which a typed
   `int`/`date` param rejects with a 422 (a real bug caught during
   verification, not a hypothetical); parsed manually inside the route
-  instead. Vehicle/chargepoint dropdown population
-  (`loadVehicleAndChargepointFilters()`) stays plain JS — it's a client-
-  side filter-chaining convenience, not something worth a round trip of
-  its own. The `#fetch-result` line (`updateLastFetchDisplay()`) still
-  shows the most recent `last_fetch_at` across *all* sources, not just a
-  one-off toast — unchanged from before, still plain JS since it's driven
-  by `onSourcesChanged()`'s own `/api/sources` fetch.
+  instead.
+
+  **htmx (Phase 5): the filter dropdowns themselves are now
+  htmx-driven too**, not client JS — completing "convert everything to
+  htmx" after an initial pass had left exactly these three `<select>`s on
+  JS-populated `fetch()`+`populateSelect()` calls. `#filter-source` is
+  `hx-get="/hx/filters/sources?with_freshness=1" hx-trigger="load,
+  sources-changed from:body" hx-target="this"` — a GET shared with
+  `report_review.html`/`statistik.html` (see `web.py`'s
+  `hx_filter_sources`), returning `<option>`s plus (only when
+  `with_freshness=1` is passed) an `hx-swap-oob` update of `#fetch-result`
+  with the same freshness text `updateLastFetchDisplay()` used to compute
+  client-side — `with_freshness` is opt-in rather than always-on because
+  htmx logs a console `htmx:oobErrorNoTarget` error for an oob fragment
+  with no matching target in the DOM, and the other two pages have no
+  `#fetch-result` element at all. `#filter-vehicle` is
+  `hx-get="/hx/filters/vehicle-chargepoint" hx-trigger="load, change
+  from:#filter-source, sources-changed from:body" hx-include="#filter-
+  source, #filter-vehicle, #filter-chargepoint" hx-target="this"` — one
+  request renders both the vehicle options (primary response) and the
+  chargepoint options (via a second `hx-swap-oob`-marked `<select
+  id="filter-chargepoint">` in the same response), since both narrow off
+  the same source filter; the current `vehicle`/`chargepoint` selections
+  are re-included on every request (`hx-include`) and marked `selected`
+  server-side if still present in the narrowed list, so picking a source
+  doesn't silently reset an unrelated still-valid selection. **Important
+  gotcha found during verification**: `hx-target` is inherited from the
+  nearest ancestor with one set, not defaulted to `"this"` just because
+  the triggering element itself lacks a `hx-target` — since these selects
+  sit inside `#filter-form` (`hx-target="#sessions-panel"`), omitting an
+  explicit `hx-target="this"` on the selects caused their *own* responses
+  to silently overwrite the session table instead of their own
+  `<option>`s (caught via Playwright: response bodies were correct, but
+  swapped into the wrong element — a real bug, not a hypothetical one).
+  Every self-updating `<select>` nested in a form with its own
+  `hx-target` needs this explicitly; same fix applied in
+  `report_review.html`/`statistik.html`.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
@@ -538,7 +568,9 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   needing to know about a source added in the Quellen panel) uses the
   `HX-Trigger` response header (`sources-changed`), the same technique
   `openwb-logger` uses for `settings-changed`; `index.html`'s own
-  `onSourcesChanged()` listens for it too, to refresh its filter dropdown.
+  `#filter-source`/`#filter-vehicle` selects also listen for it
+  (`sources-changed from:body`), to refresh their own htmx-driven
+  options — see that page's own bullet for Phase 5 detail.
   Since `/hx/...` POST/PUT bodies are form-encoded (htmx's default, not
   JSON), two inputs that aren't inside a shared `<form>` each PUT
   independently with only their own value — `web.py`'s
@@ -613,6 +645,14 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   with genuine custom JS: flips every row's checkbox, then
   `htmx.trigger(sessionsBody, 'change')` to fire the one shared recompute
   request — there's no htmx-native "toggle N other elements" primitive.
+
+  **htmx (Phase 5)**: `#filter-source`/`#filter-vehicle` converted the
+  same way as `index.html`'s own Phase 5 (see that bullet for the
+  `hx-target="this"`-must-be-explicit gotcha found here too) — the one
+  difference is no `sources-changed from:body` reactivity, matching this
+  page's existing non-reactive behavior (it never listened for that event
+  before either), and `#filter-source`'s request omits `with_freshness`
+  since this page has no `#fetch-result` element.
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
   (Monatlich/Jährlich), a totals-grid summary (four cards including a
@@ -658,9 +698,18 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   Chart instance are simply gone together, not stale. `chartColors()`
   (reads `--text`/`--muted`/`--border` at chart-creation time) is
   unchanged. Filter form submit/`load` trigger `GET /hx/statistik`
-  targeting `#stats-container`, same pattern as the other phases;
-  `loadSourceFilter()`/`loadVehicleFilter()` (client-side dropdown
-  population) are untouched plain JS.
+  targeting `#stats-container`, same pattern as the other phases.
+
+  **htmx (Phase 5)**: `#filter-source` reuses the exact same shared
+  `GET /hx/filters/sources` route as `index.html`/`report_review.html`
+  (no `with_freshness`, no `sources-changed` reactivity — this page never
+  had either). `#filter-vehicle` is the one dropdown on this page that
+  isn't chained off the source filter (matching its pre-htmx behavior, an
+  unfiltered `GET /hx/filters/vehicles`, `hx-trigger="load"` only) — this
+  page's vehicle list was never source-scoped, unlike `index.html`'s/
+  `report_review.html`'s `vehicle-chargepoint` route. Both selects need
+  the same explicit `hx-target="this"` as the other two pages (see
+  `index.html`'s Phase 5 note for why it's not implicit).
 
 Header navigation is consistent across pages: a `.brand`/`.brand-icon`
 wrapper puts the same inline lightning-bolt SVG (identical markup to the

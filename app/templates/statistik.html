@@ -87,8 +87,16 @@ try {
     <form class="inline" id="filter-form"
           hx-get="/hx/statistik" hx-target="#stats-container" hx-swap="innerHTML"
           hx-trigger="submit, load">
-      <select id="filter-source" name="source_id"><option value="">Alle Quellen</option></select>
-      <select id="filter-vehicle" name="vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="filter-source" name="source_id"
+              hx-get="/hx/filters/sources" hx-trigger="load"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Quellen</option>
+      </select>
+      <select id="filter-vehicle" name="vehicle"
+              hx-get="/hx/filters/vehicles" hx-trigger="load"
+              hx-target="this" hx-swap="innerHTML">
+        <option value="">Alle Fahrzeuge</option>
+      </select>
       <select id="granularity" name="granularity">
         <option value="month">Monatlich</option>
         <option value="year">Jährlich</option>
@@ -102,28 +110,6 @@ try {
 {% include "_settings_modal.html" %}
 <script src="/static/chart.umd.min.js"></script>
 <script>
-async function loadSourceFilter() {
-  const { sources } = await api('/api/sources');
-  const select = document.getElementById('filter-source');
-  for (const s of sources) {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.name;
-    select.appendChild(opt);
-  }
-}
-
-async function loadVehicleFilter() {
-  const { vehicles } = await api('/api/vehicles');
-  const select = document.getElementById('filter-vehicle');
-  for (const v of vehicles) {
-    const opt = document.createElement('option');
-    opt.value = v.vehicle_name;
-    opt.textContent = v.vehicle_name;
-    select.appendChild(opt);
-  }
-}
-
 function chartColors() {
   const style = getComputedStyle(document.documentElement);
   return {
@@ -209,10 +195,6 @@ function renderCharts(data) {
     });
   }
 }
-
-(async function init() {
-  await Promise.all([loadSourceFilter(), loadVehicleFilter()]);
-})();
 </script>
 </body>
 </html>

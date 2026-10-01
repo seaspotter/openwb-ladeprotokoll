@@ -1,0 +1,10 @@
+<option value="">Alle Fahrzeuge</option>
+{% for v in vehicles %}
+<option value="{{ v }}" {{ "selected" if v == selected_vehicle else "" }}>{{ v }}</option>
+{% endfor %}
+<select id="filter-chargepoint" name="chargepoint" hx-swap-oob="true">
+  <option value="">Alle Ladepunkte</option>
+  {% for c in chargepoints %}
+  <option value="{{ c }}" {{ "selected" if c == selected_chargepoint else "" }}>{{ c }}</option>
+  {% endfor %}
+</select>
