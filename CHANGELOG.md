@@ -53,6 +53,17 @@ what that means in practice for this project.
   `loadSourceFilter()`/`loadVehicleFilter()`/
   `loadVehicleAndChargepointFilters()`/`onSourcesChanged()`/
   `updateLastFetchDisplay()`/`populateSelect()` everywhere.
+- Optional self-signed digital PDF signing (PAdES, via pyhanko): a new
+  "PDFs digital signieren (selbstsigniert)" toggle in Berichts-
+  Einstellungen embeds a cryptographic signature in every newly
+  generated report, confirming the file hasn't been altered since
+  generation. The certificate is self-signed and auto-generated on
+  first enable -- it carries no identity trust chain, so recipients
+  must manually import the downloadable public certificate to see the
+  signature as trusted rather than merely intact in a PDF viewer. A
+  "Neues Zertifikat erzeugen" action lets the certificate be rotated on
+  demand. Unrelated to the existing "Unterschriftzeile im PDF" option,
+  which is just a cosmetic blank line for a handwritten signature.
 
 ### Fixed
 - A `<select>` nested inside a form with its own `hx-target` inherits
@@ -61,6 +72,12 @@ what that means in practice for this project.
   own responses into the surrounding form's target element instead of
   their own `<option>`s. Fixed by adding an explicit `hx-target="this"`
   to each one; caught via Playwright before this ever shipped.
+- pyhanko's synchronous `sign_pdf()` runs its own internal
+  `asyncio.run()`, which raises when called from inside an already-
+  running event loop -- signing always failed when called directly from
+  `_generate_report` (an async route handler). Fixed by running it via
+  `asyncio.to_thread(...)` instead; caught during integration testing
+  before this ever shipped.
 - `price_entries.decide_price` recomputed its own cost breakdown a
   second time in `web.py` just to get the per-source components --
   `PriceDecision` now carries the `CostBreakdown` it already computed

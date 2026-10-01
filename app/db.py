@@ -207,6 +207,19 @@ _SCHEMA_STATEMENTS = [
     "NUMERIC NOT NULL DEFAULT 0;",
     "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS bat_price_per_kwh "
     "NUMERIC NOT NULL DEFAULT 0;",
+    # Self-signed PAdES signing of generated PDFs (see pdf_signing.py) --
+    # certificate_pem is safe to expose over the API (it's the public half,
+    # meant to be downloaded and trusted by recipients), private_key_pem
+    # never is -- report_settings.py deliberately omits it from get_settings'
+    # return dict, keeping it to a dedicated internal-only accessor.
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS sign_pdf_enabled "
+    "BOOLEAN NOT NULL DEFAULT FALSE;",
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS "
+    "sign_pdf_certificate_pem TEXT;",
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS "
+    "sign_pdf_private_key_pem TEXT;",
+    "ALTER TABLE report_settings ADD COLUMN IF NOT EXISTS "
+    "sign_pdf_cert_created_at TIMESTAMPTZ;",
     # User-entered metadata keyed by vehicle_name, the only vehicle identity
     # this app has (openWB's own charge-log JSON has no license-plate field
     # at all) -- purely for documenting the Kennzeichen on generated reports,

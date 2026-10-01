@@ -128,7 +128,8 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 | `app/scheduler.py` | Daily background fetch (all enabled sources, current month), started as an `asyncio` task in `main.py`'s lifespan |
 | `app/price_entries.py` | Pure: price-entry match/precedence + corrected-cost math |
 | `app/report_build.py` | Pure: sessions + columns + cost_basis + price decisions -> formatted rows/totals for the template |
-| `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, orientation, signature line) — pure `validate()` + DB get/update |
+| `app/report_settings.py` | Single-row `report_settings` (default columns, cost basis, orientation, signature line, PDF-signing toggle/cert) — pure `validate()` + DB get/update |
+| `app/pdf_signing.py` | Pure: self-signed PAdES PDF signing (pyhanko) + cert/key generation (`cryptography`) |
 | `app/app_settings.py` | Single-row `app_settings` (auto-fetch on/off + wall-clock time) — same pure `validate()` + DB get/update pattern, read by both `web.py` and `scheduler.py` |
 | `app/pdf_render.py` | Jinja2 (`templates/report_pdf.html`) + WeasyPrint, HTML preview or PDF bytes from the same template |
 | `app/web.py` | FastAPI routes (all reads/writes are plain parameterized SQL) |

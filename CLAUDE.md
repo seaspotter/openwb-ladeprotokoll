@@ -197,6 +197,66 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   fresh `GET` (simulating a page reload), since a user once reported
   settings "not remembered" (root cause was the now-removed duplicate
   column picker on `report_review.html`, not this module).
+
+  **Digital PDF signing (2026-10)**: also holds `sign_pdf_enabled`,
+  `sign_pdf_certificate_pem`, `sign_pdf_private_key_pem`, and
+  `sign_pdf_cert_created_at` (additive `ALTER TABLE`, same pattern as
+  `cost_basis`/`orientation` before it) — see `pdf_signing.py` for what
+  the signature actually proves. **`get_settings()` deliberately never
+  returns `sign_pdf_private_key_pem`** — it's this install's whole
+  signing identity, and `GET /api/report-settings` returns `get_settings`
+  wholesale as JSON, so leaking it there would let anyone forge a
+  "validly signed by this install" PDF. `get_signing_key_pem(pool)` is a
+  separate, dedicated accessor for the one caller that actually needs it
+  (`web.py`'s `_generate_report`). `regenerate_certificate(pool)` (always
+  generates a fresh pair, overwriting any existing one) and
+  `ensure_certificate(pool)` (generates only if none exists yet, so
+  flipping `sign_pdf_enabled` to `True` always has a usable certificate
+  immediately) are the *only* writers of the cert/key columns —
+  `update_settings()`'s general patch-merge path can set
+  `sign_pdf_enabled` but its explicit `UPDATE` statement never references
+  the cert/key columns at all, regardless of what a caller's patch dict
+  happens to contain.
+- `app/pdf_signing.py` — **pure** (no DB/HTTP): self-signed PAdES signing
+  of generated report PDFs, via pyhanko (PAdES/CMS) + `cryptography`
+  (X.509 cert/key generation) — both pinned dependencies.
+  `generate_self_signed_cert(common_name)` returns an RSA-2048/SHA-256
+  cert+key pair as PEM `str` (10-year validity, `KeyUsage` restricted to
+  `digital_signature`+`content_commitment`, nothing else, since this cert
+  only ever signs PDFs). `sign_pdf_bytes(pdf_bytes, certificate_pem,
+  private_key_pem)` embeds the signature and returns new PDF bytes,
+  raising `PdfSigningError` on any malformed PEM or pyhanko failure.
+  Unit tested including the actually-meaningful case: signing, then
+  validating the embedded signature with pyhanko itself (`intact`+
+  `valid`+`trusted` against the same cert as trust root, `trusted=False`
+  against a *different* self-signed cert — confirms this isn't a
+  no-op that always reports "trusted" regardless of input). **A self-
+  signed certificate proves the PDF bytes weren't altered after
+  generation; it does not vouch for the data inside being correct** — a
+  `cost_basis="corrected"` report still shows user-entered price
+  overrides, and signing doesn't claim those are accurate, only that
+  this is exactly what was produced (an extension of this project's
+  existing "reports are immutable" guarantee, see `db.py`). It also
+  carries no identity trust chain: a recipient has to explicitly import
+  `sign_pdf_certificate_pem` to see the signature as "valid" rather than
+  merely "intact" in a PDF viewer — there's no free path to a
+  viewer-auto-trusted signature without that (checked: Let's Encrypt only
+  does domain-validated TLS, not document signing; genuinely free
+  *trusted* certs for PDF signing don't really exist; a real eIDAS-
+  qualified certificate needs a paid, identity-verified Trust Service
+  Provider). This is **unrelated** to `report_settings.show_signature_line`,
+  which is a purely cosmetic blank line in the PDF footer for a
+  handwritten signature — don't conflate the two in code or UI copy.
+  **Real bug caught during integration testing, not a hypothetical
+  one**: pyhanko's synchronous `sign_pdf()` convenience function runs its
+  own internal `asyncio.run()`, which raises `RuntimeError` when called
+  from inside an already-running event loop — i.e. calling
+  `sign_pdf_bytes` directly from `_generate_report` (an async FastAPI
+  route handler) always failed. Fixed in `web.py` by running it via
+  `await asyncio.to_thread(sign_pdf_bytes, ...)` instead of calling it
+  directly, same as any other blocking-but-can't-run-here call; the
+  module itself stays a plain synchronous function, no async plumbing
+  needed inside `pdf_signing.py`.
 - `app/statistics.py` — **pure**: sessions (already enriched with a price
   decision, exactly `_query_sessions`'s return shape) -> per-month or
   per-year `PeriodStats` for the `/statistik` page's charts. The energy-
@@ -347,6 +407,24 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   user feedback the same day — don't reintroduce it without being asked
   again; `report_build.COST_BASES` is deliberately back to exactly
   `("openwb", "corrected")`.
+  `_generate_report` also signs the rendered PDF bytes, right before the
+  `UPDATE` that persists them, when `report_settings.sign_pdf_enabled` is
+  true and a certificate exists (see `pdf_signing.py`/`report_settings
+  .py`'s notes) — wrapped in `await asyncio.to_thread(sign_pdf_bytes,
+  ...)` (not called directly; see `pdf_signing.py`'s note on why) and in
+  a `try/except PdfSigningError` that just logs and leaves the PDF
+  unsigned rather than failing report generation outright, since
+  `sign_pdf_enabled=True` without a certificate "shouldn't happen" (an
+  invariant `ensure_certificate` maintains) but report generation itself
+  is a more load-bearing guarantee than this one. `PUT /api/pdf-signing`
+  (body `{"enabled": bool}`)/`POST /api/pdf-signing/regenerate`/
+  `GET /api/pdf-signing/certificate` (raw `.pem` download, 404 if none
+  generated yet, `Content-Disposition: attachment` since this is meant to
+  be saved and imported elsewhere, not viewed inline) and their `/hx/...`
+  equivalents are thin wrappers around `report_settings.py`'s own
+  functions — enabling always calls `ensure_certificate` right after, so
+  a freshly-enabled toggle has a usable certificate before the response
+  even returns.
   `GET /api/vehicles` returns every vehicle name ever seen across all
   sources' sessions (`SELECT DISTINCT ... FROM sessions`), left-joined with
   its optional `vehicles.license_plate` — not just the rows that happen to
@@ -542,7 +620,17 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
   Berichts-Einstellungen, Update (Fahrzeuge keys off vehicle names like
   Preise; Update is last, app-wide maintenance not report/session config
-  — don't reorder without reason).
+  — don't reorder without reason). Berichts-Einstellungen's own fragment
+  (`hx/report_settings/panel.html`) has a digital-signing subsection
+  (`sign_pdf_*`, see `pdf_signing.py`/`report_settings.py`) placed as a
+  sibling **after** the closing `</form>` tag, deliberately not nested
+  inside it — Phase 5 already found that an element without its own
+  explicit `hx-target` inherits the nearest ancestor's rather than
+  defaulting to itself, so keeping this subsection's checkbox/button
+  outside the form (each still carrying its own explicit
+  `hx-target="#report-settings-panel"` anyway, for clarity) sidesteps
+  that gotcha entirely instead of relying on it happening to resolve the
+  same way.
 
   **htmx (2026-10): every panel except Update is a server-rendered
   fragment**, not client JSON+JS. htmx is vendored at

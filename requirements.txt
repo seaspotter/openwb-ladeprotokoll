@@ -6,3 +6,5 @@ asyncpg==0.30.0
 weasyprint==63.1
 mcp==1.29.0
 python-multipart==0.0.32
+cryptography==50.0.1
+pyhanko==0.37.0

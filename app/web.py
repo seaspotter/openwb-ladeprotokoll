@@ -3,7 +3,9 @@ entry CRUD, and report preview/generate/list/pdf. All reads/writes are
 plain parameterized SQL via asyncpg -- no ORM."""
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -21,11 +23,15 @@ from .app_settings import update_settings as update_app_settings
 from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
+from .pdf_signing import PdfSigningError, sign_pdf_bytes
 from .price_entries import PriceEntry, decide_price, match_and_decide
 from .report_build import COLUMN_LABELS, ReportBuildError, _fmt_cost, _fmt_duration, _fmt_number
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
+from .report_settings import ensure_certificate as ensure_signing_certificate
 from .report_settings import get_settings as get_report_settings
+from .report_settings import get_signing_key_pem
+from .report_settings import regenerate_certificate as regenerate_signing_certificate
 from .report_settings import update_settings as update_report_settings
 from .sources import SourceValidationError, normalize_base_url, validate_name
 from .statistics import StatisticsError
@@ -35,6 +41,7 @@ from .updater import check_for_update, get_current_version, run_update, self_upd
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+logger = logging.getLogger("openwb_ladeprotokoll.web")
 
 
 class SourceIn(BaseModel):
@@ -1004,10 +1011,12 @@ async def _report_settings_panel_response(
         {"key": k, "label": v, "checked": k in settings["default_columns"]}
         for k, v in COLUMN_LABELS.items()
     ]
+    cert_created_at_display = _fmt_dt_de(settings["sign_pdf_cert_created_at"])
     return templates.TemplateResponse(
         "hx/report_settings/panel.html",
         {
             "request": request, "columns": columns, "settings": settings,
+            "cert_created_at_display": cert_created_at_display,
             "error": error, "saved": saved,
         },
     )
@@ -1032,6 +1041,68 @@ async def hx_update_report_settings(request: Request):
         await update_report_settings(pool, patch)
     except ReportSettingsError as exc:
         return await _report_settings_panel_response(request, pool, error=str(exc))
+    return await _report_settings_panel_response(request, pool, saved=True)
+
+
+# ---------------------------------------------------------------------------
+# Self-signed PDF digital signing (pdf_signing.py) -- `sign_pdf_enabled` and
+# `sign_pdf_certificate_pem` already come back from get_report_settings()
+# above (they're plain report_settings columns), so /api/report-settings
+# already exposes them for free; these routes are the actions on top:
+# toggling, regenerating, and downloading the public certificate.
+# ---------------------------------------------------------------------------
+
+@router.put("/api/pdf-signing")
+async def api_update_pdf_signing(patch: dict):
+    pool = get_pool()
+    try:
+        settings = await update_report_settings(
+            pool, {"sign_pdf_enabled": bool(patch.get("enabled"))}
+        )
+    except ReportSettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if settings["sign_pdf_enabled"]:
+        settings = await ensure_signing_certificate(pool)
+    return settings
+
+
+@router.post("/api/pdf-signing/regenerate")
+async def api_regenerate_pdf_signing_certificate():
+    return await regenerate_signing_certificate(get_pool())
+
+
+@router.get("/api/pdf-signing/certificate")
+async def api_download_pdf_signing_certificate():
+    settings = await get_report_settings(get_pool())
+    cert_pem = settings["sign_pdf_certificate_pem"]
+    if not cert_pem:
+        raise HTTPException(status_code=404, detail="Kein Zertifikat erzeugt")
+    return Response(
+        content=cert_pem,
+        media_type="application/x-pem-file",
+        headers={
+            "Content-Disposition": 'attachment; filename="openwb-ladeprotokoll-signing-cert.pem"'
+        },
+    )
+
+
+@router.put("/hx/pdf-signing", response_class=HTMLResponse)
+async def hx_update_pdf_signing(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    try:
+        settings = await update_report_settings(pool, {"sign_pdf_enabled": "enabled" in form})
+    except ReportSettingsError as exc:
+        return await _report_settings_panel_response(request, pool, error=str(exc))
+    if settings["sign_pdf_enabled"]:
+        await ensure_signing_certificate(pool)
+    return await _report_settings_panel_response(request, pool, saved=True)
+
+
+@router.post("/hx/pdf-signing/regenerate", response_class=HTMLResponse)
+async def hx_regenerate_pdf_signing_certificate(request: Request):
+    pool = get_pool()
+    await regenerate_signing_certificate(pool)
     return await _report_settings_panel_response(request, pool, saved=True)
 
 
@@ -1392,6 +1463,22 @@ async def _generate_report(
             pool, str(report_id), title, report_row["created_at"], rows, settings
         )
         pdf_bytes = render_pdf(data, meta)
+        if settings["sign_pdf_enabled"] and settings["sign_pdf_certificate_pem"]:
+            # sign_pdf_enabled implies a certificate exists (ensure_certificate
+            # runs whenever it's turned on), so this should always hold -- the
+            # extra check is defensive, not an expected path.
+            key_pem = await get_signing_key_pem(pool)
+            if key_pem:
+                try:
+                    # pyhanko's sign_pdf() runs its own asyncio.run() internally,
+                    # which can't be called from inside this already-running
+                    # event loop -- to_thread sidesteps that (a real bug caught
+                    # during integration testing, not a hypothetical one).
+                    pdf_bytes = await asyncio.to_thread(
+                        sign_pdf_bytes, pdf_bytes, settings["sign_pdf_certificate_pem"], key_pem
+                    )
+                except PdfSigningError:
+                    logger.exception("PDF signing failed for report %s", report_id)
         await conn.execute(
             "UPDATE reports SET pdf_data = $2 WHERE id = $1", report_id, pdf_bytes
         )

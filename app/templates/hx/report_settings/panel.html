@@ -24,4 +24,26 @@
     <button type="submit">Speichern</button>
   </div>
 </form>
+
+<div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);">
+  <p class="muted" style="margin-top: 0;">Digitale PDF-Signatur</p>
+  <p class="hint">Bettet bei jedem neuen Bericht eine selbstsignierte digitale Signatur (PAdES) ein — bestätigt, dass die PDF-Datei seit der Erstellung nicht verändert wurde. Kein rechtsverbindlicher Status wie eine qualifizierte elektronische Signatur und unabhängig von der Unterschriftzeile oben; Empfänger müssen dem Zertifikat unten manuell vertrauen, damit PDF-Betrachter die Signatur als gültig anzeigen.</p>
+  <label class="check">
+    <input type="checkbox" name="enabled" {{ "checked" if settings.sign_pdf_enabled }}
+           hx-put="/hx/pdf-signing" hx-trigger="change" hx-target="#report-settings-panel" hx-swap="innerHTML">
+    PDFs digital signieren (selbstsigniert)
+  </label>
+  {% if settings.sign_pdf_certificate_pem %}
+  <p class="muted">
+    Zertifikat erzeugt am {{ cert_created_at_display }}.
+    <a href="/api/pdf-signing/certificate" download>Zertifikat herunterladen</a>
+  </p>
+  <button type="button"
+          hx-post="/hx/pdf-signing/regenerate" hx-target="#report-settings-panel" hx-swap="innerHTML"
+          hx-confirm="Neues Zertifikat erzeugen? Bereits von Empfängern vertraute Zertifikate gelten dann für künftige Berichte nicht mehr.">
+    Neues Zertifikat erzeugen
+  </button>
+  {% endif %}
+</div>
+
 <p class="muted">{{ "Gespeichert." if saved else (error or "") }}</p>

@@ -52,6 +52,16 @@ def test_validate_multiple_fields_at_once():
     assert validate(patch) == patch
 
 
+def test_validate_sign_pdf_enabled_bool_ok():
+    assert validate({"sign_pdf_enabled": True}) == {"sign_pdf_enabled": True}
+    assert validate({"sign_pdf_enabled": False}) == {"sign_pdf_enabled": False}
+
+
+def test_validate_sign_pdf_enabled_non_bool_raises():
+    with pytest.raises(ReportSettingsError):
+        validate({"sign_pdf_enabled": "yes"})
+
+
 def test_validate_valid_orientation():
     assert validate({"orientation": "portrait"}) == {"orientation": "portrait"}
     assert validate({"orientation": "landscape"}) == {"orientation": "landscape"}

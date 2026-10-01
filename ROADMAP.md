@@ -206,6 +206,24 @@ open an issue or just start working if something here matters to you.
       filter fields, a checkbox/time-input state leak, and a `<select>`
       inheriting its enclosing form's `hx-target` instead of defaulting
       to itself).
+- [x] Optional self-signed digital PDF signing (PAdES, via pyhanko) --
+      a toggle in Berichts-Einstellungen that embeds a cryptographic
+      signature in every newly generated report, proving the file
+      hasn't been altered since generation (an extension of this
+      project's existing immutable-report guarantee, not a vouch for
+      the correctness of any price overrides inside it). The
+      certificate is self-signed and auto-generated on first enable;
+      since there's no realistic free path to a certificate PDF viewers
+      trust automatically (checked the landscape -- Let's Encrypt is
+      TLS-only, genuinely free *trusted* document-signing certs don't
+      really exist, real eIDAS-qualified certs require a paid,
+      identity-verified provider), recipients have to manually import
+      the downloadable public certificate to see the signature as
+      trusted rather than merely intact. A real bug caught during
+      integration testing (not shipped): pyhanko's synchronous signing
+      call runs its own internal `asyncio.run()`, which can't be called
+      from inside the app's already-running event loop -- fixed via
+      `asyncio.to_thread(...)`.
 
 ## Next
 

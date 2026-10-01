@@ -4,14 +4,28 @@ second, per-report column picker; an earlier version had one in the review
 UI too and it was confusing to have the same choice in two places),
 whether the single "Kosten" column/total shows openWB's own cost or the
 price-corrected one, whether generated PDFs include the signature line,
-page orientation, and the two global EUR/kWh rates (`pv_price_per_kwh`,
+page orientation, the two global EUR/kWh rates (`pv_price_per_kwh`,
 `bat_price_per_kwh`) `price_entries.corrected_cost` uses for the PV- and
 battery-sourced share of a session's energy -- a `price_entries` row only
-ever prices the grid-sourced share (see that module's docstring). A single
-row in `report_settings` (id=1, enforced by a CHECK constraint) -- read
-via GET, written via PUT `/api/report-settings` (see web.py), editable
-from the Einstellungen modal (`_settings_modal.html`, included on every
-page).
+ever prices the grid-sourced share (see that module's docstring) -- and
+whether generated PDFs get a self-signed digital signature embedded
+(`sign_pdf_*`, see `pdf_signing.py` for what that actually proves and
+doesn't; unrelated to `show_signature_line`'s cosmetic blank line). A
+single row in `report_settings` (id=1, enforced by a CHECK constraint) --
+read via GET, written via PUT `/api/report-settings` (see web.py),
+editable from the Einstellungen modal (`_settings_modal.html`, included on
+every page).
+
+`get_settings()` deliberately never returns `sign_pdf_private_key_pem` --
+that column is this install's whole signing identity, and leaking it over
+`GET /api/report-settings` would let anyone forge a "validly signed by
+this install" PDF, defeating the point. `get_signing_key_pem()` is a
+separate, dedicated accessor for the one caller (web.py's
+`_generate_report`) that actually needs it; `regenerate_certificate()`/
+`ensure_certificate()` are the only writers of the cert/key columns --
+`update_settings()`'s general patch path can set `sign_pdf_enabled` but
+never touches the cert/key columns, regardless of what a caller's patch
+dict happens to contain.
 
 `validate()` is pure (no DB/HTTP) so it and its error messages are cheap
 to unit test directly, matching this project's other *_entries.py-style
@@ -19,6 +33,7 @@ modules.
 """
 from __future__ import annotations
 
+from .pdf_signing import generate_self_signed_cert
 from .report_build import COLUMN_LABELS, COST_BASES
 
 ORIENTATIONS = ("portrait", "landscape")
@@ -33,6 +48,7 @@ DEFAULT_SHOW_SIGNATURE_LINE = False
 DEFAULT_ORIENTATION = "portrait"
 DEFAULT_PV_PRICE_PER_KWH = 0.0
 DEFAULT_BAT_PRICE_PER_KWH = 0.0
+DEFAULT_SIGN_PDF_ENABLED = False
 
 
 class ReportSettingsError(ValueError):
@@ -57,6 +73,8 @@ def validate(patch: dict) -> dict:
         raise ReportSettingsError("show_signature_line muss ein Boolean sein")
     if "orientation" in patch and patch["orientation"] not in ORIENTATIONS:
         raise ReportSettingsError(f"orientation muss einer von {ORIENTATIONS} sein")
+    if "sign_pdf_enabled" in patch and not isinstance(patch["sign_pdf_enabled"], bool):
+        raise ReportSettingsError("sign_pdf_enabled muss ein Boolean sein")
     for key in ("pv_price_per_kwh", "bat_price_per_kwh"):
         if key in patch:
             value = patch[key]
@@ -71,12 +89,12 @@ async def get_settings(pool) -> dict:
         row = await pool.fetchrow(
             "INSERT INTO report_settings "
             "(id, default_columns, cost_basis, show_signature_line, orientation, "
-            "pv_price_per_kwh, bat_price_per_kwh) "
-            "VALUES (1, $1, $2, $3, $4, $5, $6) "
+            "pv_price_per_kwh, bat_price_per_kwh, sign_pdf_enabled) "
+            "VALUES (1, $1, $2, $3, $4, $5, $6, $7) "
             "ON CONFLICT (id) DO UPDATE SET id = report_settings.id "
             "RETURNING *",
             DEFAULT_COLUMNS, DEFAULT_COST_BASIS, DEFAULT_SHOW_SIGNATURE_LINE, DEFAULT_ORIENTATION,
-            DEFAULT_PV_PRICE_PER_KWH, DEFAULT_BAT_PRICE_PER_KWH,
+            DEFAULT_PV_PRICE_PER_KWH, DEFAULT_BAT_PRICE_PER_KWH, DEFAULT_SIGN_PDF_ENABLED,
         )
     return {
         "default_columns": row["default_columns"],
@@ -85,6 +103,9 @@ async def get_settings(pool) -> dict:
         "orientation": row["orientation"],
         "pv_price_per_kwh": float(row["pv_price_per_kwh"]),
         "bat_price_per_kwh": float(row["bat_price_per_kwh"]),
+        "sign_pdf_enabled": row["sign_pdf_enabled"],
+        "sign_pdf_certificate_pem": row["sign_pdf_certificate_pem"],
+        "sign_pdf_cert_created_at": row["sign_pdf_cert_created_at"],
     }
 
 
@@ -95,8 +116,46 @@ async def update_settings(pool, patch: dict) -> dict:
     await pool.execute(
         "UPDATE report_settings SET default_columns = $1, cost_basis = $2, "
         "show_signature_line = $3, orientation = $4, pv_price_per_kwh = $5, "
-        "bat_price_per_kwh = $6 WHERE id = 1",
+        "bat_price_per_kwh = $6, sign_pdf_enabled = $7 WHERE id = 1",
         merged["default_columns"], merged["cost_basis"], merged["show_signature_line"],
         merged["orientation"], merged["pv_price_per_kwh"], merged["bat_price_per_kwh"],
+        merged["sign_pdf_enabled"],
     )
     return merged
+
+
+async def get_signing_key_pem(pool) -> str | None:
+    """The one place `sign_pdf_private_key_pem` is ever read back out --
+    callers outside _generate_report's own signing step shouldn't need
+    this; see the module docstring for why it's not in get_settings()."""
+    row = await pool.fetchrow(
+        "SELECT sign_pdf_private_key_pem FROM report_settings WHERE id = 1"
+    )
+    return row["sign_pdf_private_key_pem"] if row else None
+
+
+async def regenerate_certificate(pool) -> dict:
+    """Generates a fresh self-signed cert/key pair and overwrites the
+    stored one unconditionally -- used both for the first-ever cert (via
+    ensure_certificate) and an explicit user-triggered "Neues Zertifikat
+    erzeugen" (web.py has its own hx-confirm warning that this invalidates
+    trust in whatever recipients trusted before)."""
+    await get_settings(pool)  # upsert-on-first-read, same as elsewhere
+    cert_pem, key_pem = generate_self_signed_cert()
+    await pool.execute(
+        "UPDATE report_settings SET sign_pdf_certificate_pem = $1, "
+        "sign_pdf_private_key_pem = $2, sign_pdf_cert_created_at = now() WHERE id = 1",
+        cert_pem, key_pem,
+    )
+    return await get_settings(pool)
+
+
+async def ensure_certificate(pool) -> dict:
+    """Generates a cert/key pair only if none exists yet -- called when
+    sign_pdf_enabled flips to True, so enabling always has a usable
+    certificate immediately rather than silently signing nothing until
+    someone separately clicks "Neues Zertifikat erzeugen"."""
+    current = await get_settings(pool)
+    if current["sign_pdf_certificate_pem"] is None:
+        return await regenerate_certificate(pool)
+    return current

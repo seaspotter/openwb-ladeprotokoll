@@ -145,6 +145,28 @@ Auswahl mehr:
 
 Nicht vergessen: nach Änderungen unten **Speichern** klicken.
 
+### Digitale PDF-Signatur
+
+Eine eigene, von den PDF-Spalten unabhängige Einstellung direkt unterhalb
+davon: "PDFs digital signieren (selbstsigniert)" bettet bei jedem künftig
+erzeugten Bericht eine kryptografische Signatur (PAdES) in die PDF-Datei
+ein. Sie bestätigt, dass die Datei seit der Erstellung nicht verändert
+wurde — ersetzt aber **nicht** die Unterschriftzeile oben (die ist nur
+eine optische Zeile für eine handschriftliche Unterschrift) und hat
+**keinen** rechtsverbindlichen Status wie eine qualifizierte elektronische
+Signatur. Das Zertifikat ist selbstsigniert: PDF-Betrachter wie Adobe
+Acrobat zeigen die Signatur zunächst nur als "unbekannt"/"nicht
+vertrauenswürdig" an, bis jemand das heruntergeladene Zertifikat
+(Download-Link erscheint, sobald die Einstellung aktiviert ist) manuell
+in seinen Vertrauensspeicher importiert.
+
+Beim ersten Aktivieren wird automatisch ein Zertifikat erzeugt (RSA-2048,
+10 Jahre gültig). "Neues Zertifikat erzeugen" tauscht es gezielt aus —
+danach gelten bereits verteilte/vertraute Zertifikate für künftige
+Berichte nicht mehr, bereits erzeugte PDFs bleiben aber unverändert
+gültig signiert. Deaktivieren stoppt nur das Signieren neuer Berichte,
+das bestehende Zertifikat bleibt erhalten.
+
 ## Bericht erstellen
 
 Über "Bericht erstellen" in der Kopfzeile gelangt man zur Auswahl-Ansicht.
