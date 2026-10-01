@@ -21,7 +21,7 @@ from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
 from .price_entries import PriceEntry, decide_price, match_and_decide
-from .report_build import COLUMN_LABELS, ReportBuildError
+from .report_build import COLUMN_LABELS, ReportBuildError, _fmt_cost, _fmt_number
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
 from .report_settings import get_settings as get_report_settings
@@ -630,6 +630,72 @@ async def api_sessions(
     return {"sessions": sessions}
 
 
+@router.get("/hx/sessions", response_class=HTMLResponse)
+async def hx_sessions(
+    request: Request,
+    source_id: str | None = None,
+    vehicle: str | None = None,
+    chargepoint: str | None = None,
+    from_: str | None = None,
+    to: str | None = None,
+):
+    """Query params come from htmx serializing the whole filter <form>,
+    including empty/unselected fields as empty strings rather than
+    omitting them -- unlike /api/sessions's typed int|None/date|None
+    params (used by real API callers who only ever send what they mean),
+    these need to tolerate "" as "no filter"."""
+    pool = get_pool()
+    sessions = await _query_sessions(
+        pool,
+        int(source_id) if source_id else None,
+        vehicle or None,
+        chargepoint or None,
+        date.fromisoformat(from_) if from_ else None,
+        date.fromisoformat(to) if to else None,
+    )
+    source_rows = await pool.fetch("SELECT id, name FROM sources")
+    names_by_id = {r["id"]: r["name"] for r in source_rows}
+    rows = []
+    for s in sessions:
+        rows.append({
+            "time_begin_display": _fmt_dt_de(
+                datetime.fromisoformat(s["time_begin"]) if s["time_begin"] else None
+            ),
+            "source_name": names_by_id.get(s["source_id"], f"#{s['source_id']}"),
+            "vehicle_name": s["vehicle_name"],
+            "chargepoint_name": s["chargepoint_name"],
+            "energy_display": _fmt_number(s["energy_kwh"], 2, " kWh"),
+            "cost_openwb_display": _fmt_cost(s["cost_openwb"]),
+            "price_label": s["price_provider"] or "kein Preis hinterlegt",
+            "cost_used_display": _fmt_cost(s["cost_used"]),
+            "flagged": s["cost_delta_flagged"],
+        })
+    return templates.TemplateResponse(
+        "hx/sessions/table.html", {"request": request, "sessions": rows, "count": len(rows)},
+    )
+
+
+@router.post("/hx/fetch-now", response_class=HTMLResponse)
+async def hx_fetch_now_all(request: Request):
+    """Fetches every enabled source's current month in one request
+    (server-side loop) instead of the page issuing one fetch-now call per
+    source and recombining the results client-side."""
+    pool = get_pool()
+    rows = await pool.fetch("SELECT * FROM sources WHERE enabled")
+    if not rows:
+        message = 'Keine aktive Quelle -- unter "⚙ Einstellungen" hinzufügen.'
+    else:
+        for source in rows:
+            await fetch_service.fetch_source(pool, source, months=[current_month()])
+        message = "Abruf abgeschlossen."
+    response = templates.TemplateResponse(
+        "hx/_msg.html", {"request": request, "msg": message},
+    )
+    if rows:
+        response.headers["HX-Trigger"] = "sources-changed"
+    return response
+
+
 @router.get("/api/vehicles")
 async def api_list_vehicles():
     """Every vehicle name ever seen across all sources' sessions, left-joined
@@ -1126,7 +1192,7 @@ def hx_update_check(request: Request):
     else:
         msg = f"Aktuell ({data['current']})"
     return templates.TemplateResponse(
-        "hx/update/msg.html", {"request": request, "msg": msg},
+        "hx/_msg.html", {"request": request, "msg": msg},
     )
 
 

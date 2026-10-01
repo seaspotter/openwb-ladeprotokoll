@@ -1,0 +1,27 @@
+<table id="sessions-table">
+  <thead>
+    <tr>
+      <th>Beginn</th><th>Quelle</th><th>Fahrzeug</th><th>Ladepunkt</th>
+      <th class="numeric">Energie</th><th class="numeric">Kosten (real)</th>
+      <th>Preis</th><th class="numeric">Kosten (korrigiert)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in sessions %}
+    <tr>
+      <td>{{ s.time_begin_display }}</td>
+      <td>{{ s.source_name }}</td>
+      <td>{{ s.vehicle_name or "–" }}</td>
+      <td>{{ s.chargepoint_name or "–" }}</td>
+      <td class="numeric">{{ s.energy_display }}</td>
+      <td class="numeric {{ 'flagged' if s.flagged }}">{{ s.cost_openwb_display }}</td>
+      <td>{{ s.price_label }}</td>
+      <td class="numeric {{ 'flagged' if s.flagged }}">{{ s.cost_used_display }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="empty-hint" id="empty-hint" {{ "" if not sessions else "hidden" }}>
+  Noch keine Ladevorgänge. Quelle unter "⚙ Einstellungen" hinzufügen, dann "Jetzt abrufen".
+</p>
+<span class="session-count" id="session-count" hx-swap-oob="true">{{ count }} Ladevorgänge</span>

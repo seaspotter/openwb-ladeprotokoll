@@ -436,14 +436,34 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   month. Sources and price entries are deliberately **not** managed here
   — see `_settings_modal.html` — so this page stays focused on "what got
   fetched", not configuration (a user-feedback-driven split — apply the
-  same split to any new page). The `#fetch-result` line under the filter
-  panel (`updateLastFetchDisplay()`) shows the most recent `last_fetch_at`
-  across *all* sources, not just a one-off "N Quelle(n) erfolgreich
-  abgerufen" toast from the last button click — a persistent freshness
-  indicator (updated on page load and after "Jetzt abrufen" via a fresh
-  `GET /api/sources`, since the pre-fetch source list used to pick which
-  sources to hit is stale by the time the fetches finish) that also
-  surfaces any source whose last scheduled/manual fetch failed.
+  same split to any new page).
+
+  **htmx (Phase 2)**: the filter `<form>` itself is `hx-get="/hx/sessions"`,
+  `hx-trigger="submit, sources-changed from:body, load"` — `load` covers
+  the initial page-load fetch (`init()` no longer calls a JS `loadSessions()`
+  at all), `sources-changed` means "Jetzt abrufen" (now `hx-post="/hx/
+  fetch-now"`, one server-side loop over every enabled source instead of
+  the page issuing one fetch-now call per source and recombining results)
+  and the Einstellungen modal's Quellen panel both refresh the table for
+  free. `GET /hx/sessions` resolves each row's source name server-side
+  (a plain dict lookup against `sources`, no more client-side `pageSources`
+  array) and formats energy/cost with `report_build._fmt_number`/
+  `_fmt_cost` (same German-locale comma formatting the old JS `fmtNum` did
+  — reused rather than reimplemented) — the fragment carries an
+  `hx-swap-oob` block for `#session-count` alongside the primary
+  `#sessions-panel` swap, since one response needs to update both.
+  **Query params are typed as plain `str | None`, not `int | None`/
+  `date | None`** like `/api/sessions`'s own params — htmx serializes the
+  whole form including empty/unselected fields as `""`, which a typed
+  `int`/`date` param rejects with a 422 (a real bug caught during
+  verification, not a hypothetical); parsed manually inside the route
+  instead. Vehicle/chargepoint dropdown population
+  (`loadVehicleAndChargepointFilters()`) stays plain JS — it's a client-
+  side filter-chaining convenience, not something worth a round trip of
+  its own. The `#fetch-result` line (`updateLastFetchDisplay()`) still
+  shows the most recent `last_fetch_at` across *all* sources, not just a
+  one-off toast — unchanged from before, still plain JS since it's driven
+  by `onSourcesChanged()`'s own `/api/sources` fetch.
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-

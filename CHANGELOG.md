@@ -17,6 +17,12 @@ what that means in practice for this project.
   cleanly). No user-visible behavior change; price entries now show
   their source name without a client-side lookup table, since it's
   resolved server-side.
+- Übersicht's session table/filter also converted to htmx: the filter
+  form fetches via `hx-get`, "Jetzt abrufen" is now one server-side loop
+  over every enabled source (`POST /hx/fetch-now`) instead of one client
+  request per source. Source names and energy/cost figures are formatted
+  server-side now, reusing the same German-locale helpers the PDF report
+  already used.
 
 ### Fixed
 - `price_entries.decide_price` recomputed its own cost breakdown a

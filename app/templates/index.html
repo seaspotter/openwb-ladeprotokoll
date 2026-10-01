@@ -75,7 +75,7 @@ try {
   </div>
   <span class="nav-spacer"></span>
   <div class="header-actions">
-    <button type="button" id="fetch-now-btn">Jetzt abrufen</button>
+    <button type="button" hx-post="/hx/fetch-now" hx-target="#fetch-result" hx-swap="innerHTML" hx-disabled-elt="this">Jetzt abrufen</button>
     <a href="/statistik" class="nav-btn">Statistik</a>
     <a href="/report-review" class="nav-btn">Bericht erstellen &rarr;</a>
     <button type="button" class="header-icon-btn" id="theme-toggle" data-theme-toggle title="Hell/Dunkel"></button>
@@ -85,12 +85,14 @@ try {
 <main>
   <div class="panel">
     <h2>Ladevorgänge</h2>
-    <form class="inline" id="filter-form">
-      <select id="filter-source"><option value="">Alle Quellen</option></select>
-      <select id="filter-vehicle"><option value="">Alle Fahrzeuge</option></select>
-      <select id="filter-chargepoint"><option value="">Alle Ladepunkte</option></select>
-      <input type="date" id="filter-from">
-      <input type="date" id="filter-to">
+    <form class="inline" id="filter-form"
+          hx-get="/hx/sessions" hx-target="#sessions-panel" hx-swap="innerHTML"
+          hx-trigger="submit, sources-changed from:body, load">
+      <select id="filter-source" name="source_id"><option value="">Alle Quellen</option></select>
+      <select id="filter-vehicle" name="vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="filter-chargepoint" name="chargepoint"><option value="">Alle Ladepunkte</option></select>
+      <input type="date" id="filter-from" name="from_">
+      <input type="date" id="filter-to" name="to">
       <button type="submit">Filtern</button>
       <span class="session-count" id="session-count"></span>
     </form>
@@ -98,19 +100,7 @@ try {
   </div>
 
   <div class="panel">
-    <table id="sessions-table">
-      <thead>
-        <tr>
-          <th>Beginn</th><th>Quelle</th><th>Fahrzeug</th><th>Ladepunkt</th>
-          <th class="numeric">Energie</th><th class="numeric">Kosten (real)</th>
-          <th>Preis</th><th class="numeric">Kosten (korrigiert)</th>
-        </tr>
-      </thead>
-      <tbody id="sessions-body"></tbody>
-    </table>
-    <p class="empty-hint" id="empty-hint" hidden>
-      Noch keine Ladevorgänge. Quelle unter "⚙ Einstellungen" hinzufügen, dann "Jetzt abrufen".
-    </p>
+    <div id="sessions-panel"></div>
   </div>
 </main>
 {% include "_settings_modal.html" %}
@@ -118,11 +108,6 @@ try {
 function fmtDateTime(iso) {
   if (!iso) return '–';
   return new Date(iso).toLocaleString('de-DE');
-}
-
-function fmtNum(value, decimals, suffix) {
-  if (value === null || value === undefined) return '–';
-  return value.toFixed(decimals).replace('.', ',') + (suffix || '');
 }
 
 function populateSelect(select, values, placeholder) {
@@ -137,15 +122,14 @@ function populateSelect(select, values, placeholder) {
   select.value = current;
 }
 
-let pageSources = [];
-
 // Re-fetches and rebuilds the filter dropdown + freshness display --
 // called at init and whenever the Einstellungen modal's Quellen panel
 // changes sources (via the "sources-changed" HX-Trigger event), so this
-// page stays in sync without a full reload.
+// page stays in sync without a full reload. The session table itself
+// refreshes independently (the filter form's own hx-trigger listens for
+// "sources-changed" too).
 async function onSourcesChanged() {
   const { sources } = await api('/api/sources');
-  pageSources = sources;
   const select = document.getElementById('filter-source');
   const current = select.value;
   select.innerHTML = '<option value="">Alle Quellen</option>';
@@ -191,84 +175,18 @@ async function loadVehicleAndChargepointFilters() {
   populateSelect(document.getElementById('filter-chargepoint'), chargepoints, 'Alle Ladepunkte');
 }
 
-async function loadSessions() {
-  const params = new URLSearchParams();
-  const sourceId = document.getElementById('filter-source').value;
-  const vehicle = document.getElementById('filter-vehicle').value;
-  const chargepoint = document.getElementById('filter-chargepoint').value;
-  const from = document.getElementById('filter-from').value;
-  const to = document.getElementById('filter-to').value;
-  if (sourceId) params.set('source_id', sourceId);
-  if (vehicle) params.set('vehicle', vehicle);
-  if (chargepoint) params.set('chargepoint', chargepoint);
-  if (from) params.set('from_', from);
-  if (to) params.set('to', to);
-
-  const { sessions: rows } = await api('/api/sessions?' + params.toString());
-  const body = document.getElementById('sessions-body');
-  body.innerHTML = '';
-  document.getElementById('session-count').textContent = `${rows.length} Ladevorgänge`;
-  document.getElementById('empty-hint').hidden = rows.length > 0;
-
-  for (const s of rows) {
-    const tr = document.createElement('tr');
-    const sourceName = pageSources.find((x) => x.id === s.source_id)?.name || `#${s.source_id}`;
-    const priceLabel = s.price_provider || 'kein Preis hinterlegt';
-    const flagged = s.cost_delta_flagged;
-    tr.innerHTML = `
-      <td>${fmtDateTime(s.time_begin)}</td>
-      <td>${sourceName}</td>
-      <td>${s.vehicle_name || '–'}</td>
-      <td>${s.chargepoint_name || '–'}</td>
-      <td class="numeric">${fmtNum(s.energy_kwh, 2, ' kWh')}</td>
-      <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_openwb, 2, ' €')}</td>
-      <td>${priceLabel}</td>
-      <td class="numeric ${flagged ? 'flagged' : ''}">${fmtNum(s.cost_used, 2, ' €')}</td>
-    `;
-    body.appendChild(tr);
-  }
-}
-
 document.getElementById('filter-source').addEventListener('change', () => {
   loadVehicleAndChargepointFilters();
 });
 
-document.getElementById('filter-form').addEventListener('submit', (ev) => {
-  ev.preventDefault();
-  loadSessions();
-});
-
-document.getElementById('fetch-now-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('fetch-now-btn');
-  const resultEl = document.getElementById('fetch-result');
-  const { sources } = await api('/api/sources');
-  const enabled = sources.filter((s) => s.enabled);
-  if (enabled.length === 0) {
-    resultEl.textContent = 'Keine aktive Quelle -- unter "⚙ Einstellungen" hinzufügen.';
-    return;
-  }
-  btn.disabled = true;
-  resultEl.textContent = 'Abruf läuft …';
-  for (const s of enabled) {
-    try {
-      await api(`/api/sources/${s.id}/fetch-now`, { method: 'POST' });
-    } catch (err) {
-      // per-source failure already lands in last_fetch_status, reflected
-      // in updateLastFetchDisplay() below once sources are reloaded
-    }
-  }
-  btn.disabled = false;
+document.body.addEventListener('sources-changed', async () => {
   await onSourcesChanged();
   await loadVehicleAndChargepointFilters();
-  await loadSessions();
 });
-
-document.body.addEventListener('sources-changed', onSourcesChanged);
 
 (async function init() {
   await onSourcesChanged();
   await loadVehicleAndChargepointFilters();
-  await loadSessions();
 })();
 </script>
 </body>
