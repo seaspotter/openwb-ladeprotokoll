@@ -84,10 +84,12 @@ try {
 <main>
   <div class="panel">
     <h2>Filter</h2>
-    <form class="inline" id="filter-form">
-      <select id="filter-source"><option value="">Alle Quellen</option></select>
-      <select id="filter-vehicle"><option value="">Alle Fahrzeuge</option></select>
-      <select id="granularity">
+    <form class="inline" id="filter-form"
+          hx-get="/hx/statistik" hx-target="#stats-container" hx-swap="innerHTML"
+          hx-trigger="submit, load">
+      <select id="filter-source" name="source_id"><option value="">Alle Quellen</option></select>
+      <select id="filter-vehicle" name="vehicle"><option value="">Alle Fahrzeuge</option></select>
+      <select id="granularity" name="granularity">
         <option value="month">Monatlich</option>
         <option value="year">Jährlich</option>
       </select>
@@ -95,51 +97,11 @@ try {
     </form>
   </div>
 
-  <div class="panel">
-    <h2>Summe</h2>
-    <div class="totals-grid">
-      <div class="stat"><div class="label">Ladevorgänge</div><div class="value" id="stat-sessions">–</div></div>
-      <div class="stat"><div class="label">Energie</div><div class="value" id="stat-energy">–</div></div>
-      <div class="stat"><div class="label" id="stat-cost-label">Kosten</div><div class="value" id="stat-cost">–</div></div>
-      <div class="stat"><div class="label">PV-Eigenverbrauch</div><div class="value" id="stat-pv-share">–</div></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Energiequellen (kWh)</h2>
-    <div class="chart-wrap"><canvas id="chart-energy"></canvas></div>
-    <p class="empty-hint" id="empty-hint" hidden>Noch keine Ladevorgänge für diese Auswahl.</p>
-  </div>
-
-  <div class="panel">
-    <h2 id="cost-chart-heading">Kosten</h2>
-    <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
-    <p class="muted" id="cost-breakdown" hidden></p>
-  </div>
-
-  <div class="panel">
-    <h2>Nach Fahrzeug</h2>
-    <table id="vehicle-table">
-      <thead>
-        <tr>
-          <th>Fahrzeug</th><th class="numeric">Ladevorgänge</th>
-          <th class="numeric">Energie</th><th class="numeric">Netz</th>
-          <th class="numeric">PV</th><th class="numeric">Speicher</th>
-          <th class="numeric" id="vehicle-cost-header">Kosten</th>
-        </tr>
-      </thead>
-      <tbody id="vehicle-body"></tbody>
-    </table>
-  </div>
+  <div id="stats-container"></div>
 </main>
 {% include "_settings_modal.html" %}
 <script src="/static/chart.umd.min.js"></script>
 <script>
-function fmtNum(value, decimals, suffix) {
-  if (value === null || value === undefined) return '–';
-  return value.toFixed(decimals).replace('.', ',') + (suffix || '');
-}
-
 async function loadSourceFilter() {
   const { sources } = await api('/api/sources');
   const select = document.getElementById('filter-source');
@@ -162,18 +124,6 @@ async function loadVehicleFilter() {
   }
 }
 
-const COST_BASIS_LABELS = { openwb: 'openWB-Wert', corrected: 'Korrigiert' };
-let currentCostBasis = 'corrected';
-
-async function loadCostBasisLabel() {
-  const settings = await api('/api/report-settings');
-  currentCostBasis = settings.cost_basis;
-  const label = `Kosten (${COST_BASIS_LABELS[settings.cost_basis]})`;
-  document.getElementById('stat-cost-label').textContent = label;
-  document.getElementById('cost-chart-heading').textContent = label;
-  document.getElementById('vehicle-cost-header').textContent = label;
-}
-
 function chartColors() {
   const style = getComputedStyle(document.documentElement);
   return {
@@ -183,64 +133,27 @@ function chartColors() {
   };
 }
 
-let chartEnergy = null;
-let chartCost = null;
-
-async function loadStatistics() {
-  const params = new URLSearchParams();
-  const sourceId = document.getElementById('filter-source').value;
-  const vehicle = document.getElementById('filter-vehicle').value;
-  const granularity = document.getElementById('granularity').value;
-  if (sourceId) params.set('source_id', sourceId);
-  if (vehicle) params.set('vehicle', vehicle);
-  params.set('granularity', granularity);
-
-  const { periods, by_vehicle } = await api('/api/statistics?' + params.toString());
-  document.getElementById('empty-hint').hidden = periods.length > 0;
-
-  const totalSessions = periods.reduce((a, p) => a + p.session_count, 0);
-  const totalEnergy = periods.reduce((a, p) => a + p.energy_kwh, 0);
-  const totalCost = periods.reduce((a, p) => a + p.cost, 0);
-  const totalPv = periods.reduce((a, p) => a + p.energy_pv_kwh + p.energy_bat_kwh, 0);
-  document.getElementById('stat-sessions').textContent = totalSessions;
-  document.getElementById('stat-energy').textContent = fmtNum(totalEnergy, 1, ' kWh');
-  document.getElementById('stat-cost').textContent = fmtNum(totalCost, 2, ' €');
-  document.getElementById('stat-pv-share').textContent =
-    totalEnergy > 0 ? fmtNum((totalPv / totalEnergy) * 100, 0, ' %') : '–';
-
-  const vehicleBody = document.getElementById('vehicle-body');
-  vehicleBody.innerHTML = '';
-  for (const v of by_vehicle) {
-    const share = (kwh) => v.energy_kwh > 0 ? fmtNum((kwh / v.energy_kwh) * 100, 0, ' %') : '–';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${v.vehicle_name}</td>
-      <td class="numeric">${v.session_count}</td>
-      <td class="numeric">${fmtNum(v.energy_kwh, 1, ' kWh')}</td>
-      <td class="numeric">${share(v.energy_grid_kwh)}</td>
-      <td class="numeric">${share(v.energy_pv_kwh)}</td>
-      <td class="numeric">${share(v.energy_bat_kwh)}</td>
-      <td class="numeric">${fmtNum(v.cost, 2, ' €')}</td>
-    `;
-    vehicleBody.appendChild(tr);
-  }
-
+// Called by hx/statistik/stats.html's own trailing <script> after every
+// swap -- the canvases are brand-new elements each time (the whole
+// fragment, stat cards/table/charts together, swaps as one unit), so
+// there's nothing stale to .destroy() first, unlike the old fetch+build
+// version which had to track chart instances across repeated renders of
+// the same long-lived canvas.
+function renderCharts(data) {
   const colors = chartColors();
-  const labels = periods.map((p) => p.period);
   const tickOptions = { color: colors.muted };
   const gridOptions = { color: colors.grid };
   const legendOptions = { position: 'bottom', labels: { color: colors.text } };
 
-  if (chartEnergy) chartEnergy.destroy();
-  chartEnergy = new Chart(document.getElementById('chart-energy'), {
+  new Chart(document.getElementById('chart-energy'), {
     type: 'bar',
     data: {
-      labels,
+      labels: data.labels,
       datasets: [
-        { label: 'Netz', data: periods.map((p) => p.energy_grid_kwh), backgroundColor: '#6b7280' },
-        { label: 'PV', data: periods.map((p) => p.energy_pv_kwh), backgroundColor: '#16a34a' },
-        { label: 'Speicher', data: periods.map((p) => p.energy_bat_kwh), backgroundColor: '#f59e0b' },
-        { label: 'Ladepunkt', data: periods.map((p) => p.energy_cp_kwh), backgroundColor: '#2563eb' },
+        { label: 'Netz', data: data.energy_grid, backgroundColor: '#6b7280' },
+        { label: 'PV', data: data.energy_pv, backgroundColor: '#16a34a' },
+        { label: 'Speicher', data: data.energy_bat, backgroundColor: '#f59e0b' },
+        { label: 'Ladepunkt', data: data.energy_cp, backgroundColor: '#2563eb' },
       ],
     },
     options: {
@@ -253,21 +166,20 @@ async function loadStatistics() {
     },
   });
 
-  const costBreakdownEl = document.getElementById('cost-breakdown');
-  if (chartCost) chartCost.destroy();
-  if (currentCostBasis === 'corrected') {
-    // Same colors as chart-energy's Netz/PV/Speicher, no "Ladepunkt" bucket
-    // (chargepoint-sourced energy is priced at the battery rate, folded
-    // into cost_bat -- see price_entries.corrected_cost_breakdown) and no
-    // blue, since blue already means "Ladepunkt" in chart-energy's legend.
-    chartCost = new Chart(document.getElementById('chart-cost'), {
+  // Same colors as chart-energy's Netz/PV/Speicher, no "Ladepunkt" bucket
+  // (chargepoint-sourced energy is priced at the battery rate, folded
+  // into cost_bat -- see price_entries.corrected_cost_breakdown) and no
+  // blue, since blue already means "Ladepunkt" in chart-energy's legend.
+  // Under cost_basis="openwb" there's nothing to split, so one flat bar.
+  if (data.cost_basis === 'corrected') {
+    new Chart(document.getElementById('chart-cost'), {
       type: 'bar',
       data: {
-        labels,
+        labels: data.labels,
         datasets: [
-          { label: 'Netz', data: periods.map((p) => p.cost_grid), backgroundColor: '#6b7280' },
-          { label: 'PV', data: periods.map((p) => p.cost_pv), backgroundColor: '#16a34a' },
-          { label: 'Speicher', data: periods.map((p) => p.cost_bat), backgroundColor: '#f59e0b' },
+          { label: 'Netz', data: data.cost_grid, backgroundColor: '#6b7280' },
+          { label: 'PV', data: data.cost_pv, backgroundColor: '#16a34a' },
+          { label: 'Speicher', data: data.cost_bat, backgroundColor: '#f59e0b' },
         ],
       },
       options: {
@@ -279,19 +191,12 @@ async function loadStatistics() {
         plugins: { legend: legendOptions },
       },
     });
-    const totalGrid = periods.reduce((a, p) => a + p.cost_grid, 0);
-    const totalPvCost = periods.reduce((a, p) => a + p.cost_pv, 0);
-    const totalBatCost = periods.reduce((a, p) => a + p.cost_bat, 0);
-    costBreakdownEl.hidden = false;
-    costBreakdownEl.textContent =
-      `Netz: ${fmtNum(totalGrid, 2, ' €')} · PV: ${fmtNum(totalPvCost, 2, ' €')} · ` +
-      `Speicher: ${fmtNum(totalBatCost, 2, ' €')}`;
   } else {
-    chartCost = new Chart(document.getElementById('chart-cost'), {
+    new Chart(document.getElementById('chart-cost'), {
       type: 'bar',
       data: {
-        labels,
-        datasets: [{ label: 'Kosten', data: periods.map((p) => p.cost), backgroundColor: '#2563eb' }],
+        labels: data.labels,
+        datasets: [{ label: 'Kosten', data: data.cost, backgroundColor: '#2563eb' }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -302,18 +207,11 @@ async function loadStatistics() {
         plugins: { legend: { display: false } },
       },
     });
-    costBreakdownEl.hidden = true;
   }
 }
 
-document.getElementById('filter-form').addEventListener('submit', (ev) => {
-  ev.preventDefault();
-  loadStatistics();
-});
-
 (async function init() {
-  await Promise.all([loadSourceFilter(), loadVehicleFilter(), loadCostBasisLabel()]);
-  await loadStatistics();
+  await Promise.all([loadSourceFilter(), loadVehicleFilter()]);
 })();
 </script>
 </body>

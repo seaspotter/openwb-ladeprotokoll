@@ -34,6 +34,15 @@ what that means in practice for this project.
   route and the MCP tool. "Vorschau" (renders straight into an iframe,
   persists nothing) deliberately stays plain JS/JSON -- there's no
   fragment to swap into an iframe srcdoc.
+- Statistik converted to htmx too, completing the migration across all
+  four pages. The two Chart.js charts can't be a plain DOM-swap fragment
+  (canvas draws, not HTML), so `GET /hx/statistik` returns the stat
+  cards/table as server-rendered HTML plus the same numbers as embedded
+  JSON, with a trailing inline `<script>` calling a slimmed-down
+  `renderCharts()` that's now purely Chart.js draw calls -- no more
+  fetching or building table/stat-card HTML in JS, and no more tracked
+  chart instances to `.destroy()` between renders, since the whole
+  fragment (canvases included) replaces as one unit each time.
 
 ### Fixed
 - `price_entries.decide_price` recomputed its own cost breakdown a

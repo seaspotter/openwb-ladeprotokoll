@@ -3,6 +3,7 @@ entry CRUD, and report preview/generate/list/pdf. All reads/writes are
 plain parameterized SQL via asyncpg -- no ORM."""
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -797,6 +798,85 @@ async def api_statistics(
         "periods": [vars(p) for p in periods],
         "by_vehicle": [vars(v) for v in by_vehicle],
     }
+
+
+@router.get("/hx/statistik", response_class=HTMLResponse)
+async def hx_statistik(
+    request: Request,
+    granularity: str = "month",
+    source_id: str | None = None,
+    vehicle: str | None = None,
+):
+    pool = get_pool()
+    settings = await get_report_settings(pool)
+    cost_basis = settings["cost_basis"]
+    sessions = await _query_sessions(
+        pool, int(source_id) if source_id else None, vehicle or None, None, None, None,
+        split_pv_bat=True,
+    )
+    try:
+        periods = aggregate_statistics(sessions, granularity, cost_basis)
+        by_vehicle = aggregate_by_vehicle_statistics(sessions, cost_basis)
+    except StatisticsError as exc:
+        return HTMLResponse(f"Fehler: {exc}", status_code=200)
+
+    def _share(part: float, whole: float) -> str:
+        return _fmt_number(part / whole * 100, 0, " %") if whole > 0 else "–"
+
+    total_sessions = sum(p.session_count for p in periods)
+    total_energy = sum(p.energy_kwh for p in periods)
+    total_pv = sum(p.energy_pv_kwh + p.energy_bat_kwh for p in periods)
+
+    vehicles = [
+        {
+            "vehicle_name": v.vehicle_name,
+            "session_count": v.session_count,
+            "energy_display": _fmt_number(v.energy_kwh, 1, " kWh"),
+            "grid_share_display": _share(v.energy_grid_kwh, v.energy_kwh),
+            "pv_share_display": _share(v.energy_pv_kwh, v.energy_kwh),
+            "bat_share_display": _share(v.energy_bat_kwh, v.energy_kwh),
+            "cost_display": _fmt_cost(v.cost),
+        }
+        for v in by_vehicle
+    ]
+
+    chart_data = {
+        "labels": [p.period for p in periods],
+        "energy_grid": [p.energy_grid_kwh for p in periods],
+        "energy_pv": [p.energy_pv_kwh for p in periods],
+        "energy_bat": [p.energy_bat_kwh for p in periods],
+        "energy_cp": [p.energy_cp_kwh for p in periods],
+        "cost_basis": cost_basis,
+    }
+    cost_breakdown_totals = {}
+    if cost_basis == "corrected":
+        chart_data["cost_grid"] = [p.cost_grid for p in periods]
+        chart_data["cost_pv"] = [p.cost_pv for p in periods]
+        chart_data["cost_bat"] = [p.cost_bat for p in periods]
+        cost_breakdown_totals = {
+            "cost_grid_total_display": _fmt_cost(sum(p.cost_grid for p in periods)),
+            "cost_pv_total_display": _fmt_cost(sum(p.cost_pv for p in periods)),
+            "cost_bat_total_display": _fmt_cost(sum(p.cost_bat for p in periods)),
+        }
+    else:
+        chart_data["cost"] = [p.cost for p in periods]
+
+    return templates.TemplateResponse(
+        "hx/statistik/stats.html",
+        {
+            "request": request,
+            "empty": not periods,
+            "stat_sessions": total_sessions,
+            "stat_energy_display": _fmt_number(total_energy, 1, " kWh"),
+            "cost_label": f"Kosten ({_COST_BASIS_LABELS[cost_basis]})",
+            "stat_cost_display": _fmt_cost(sum(p.cost for p in periods)),
+            "stat_pv_share_display": _share(total_pv, total_energy),
+            "cost_basis": cost_basis,
+            "vehicles": vehicles,
+            "chart_data_json": json.dumps(chart_data),
+            **cost_breakdown_totals,
+        },
+    )
 
 
 @router.get("/api/report-columns")

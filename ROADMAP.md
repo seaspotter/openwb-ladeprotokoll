@@ -183,6 +183,23 @@ open an issue or just start working if something here matters to you.
       `False` — a bind-mount-free, image-only deployment (Synology
       Container Manager, say) that `git pull` has nothing to update in
       place.
+- [x] Full htmx migration, same pattern as the sibling `openwb-logger`/
+      `knxpilot` projects (vendored, `/hx/...` routes returning rendered
+      fragments instead of client JSON+JS) — unlike the siblings, which
+      each declined their single riskiest view, this went all the way
+      across all four pages: Einstellungen, Übersicht, Bericht erstellen
+      (including its live per-row price-override + running totals,
+      reusing the exact price-decision logic report generation itself
+      uses), and Statistik (the two Chart.js charts via an embedded-JSON
+      + trailing-inline-`<script>` pattern, since a canvas draw isn't a
+      DOM swap). Residual plain JS only where it genuinely doesn't fit:
+      the Update panel's restart-poll, report-review's "Vorschau"
+      (renders into an iframe, nothing to swap), and dropdown-population
+      conveniences. Each phase shipped as its own commit with a full
+      pytest + pgserver-integration + Playwright verification pass before
+      moving to the next, catching two real bugs along the way (a 422 on
+      empty filter fields, a checkbox/time-input state leak) that
+      wouldn't have surfaced without actually exercising the browser.
 
 ## Next
 

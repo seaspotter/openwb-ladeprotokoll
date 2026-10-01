@@ -1,0 +1,53 @@
+<div class="panel">
+  <h2>Summe</h2>
+  <div class="totals-grid">
+    <div class="stat"><div class="label">Ladevorgänge</div><div class="value">{{ stat_sessions }}</div></div>
+    <div class="stat"><div class="label">Energie</div><div class="value">{{ stat_energy_display }}</div></div>
+    <div class="stat"><div class="label">{{ cost_label }}</div><div class="value">{{ stat_cost_display }}</div></div>
+    <div class="stat"><div class="label">PV-Eigenverbrauch</div><div class="value">{{ stat_pv_share_display }}</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Energiequellen (kWh)</h2>
+  <div class="chart-wrap"><canvas id="chart-energy"></canvas></div>
+  <p class="empty-hint" {{ "" if empty else "hidden" }}>Noch keine Ladevorgänge für diese Auswahl.</p>
+</div>
+
+<div class="panel">
+  <h2>{{ cost_label }}</h2>
+  <div class="chart-wrap"><canvas id="chart-cost"></canvas></div>
+  {% if cost_basis == "corrected" %}
+  <p class="muted">Netz: {{ cost_grid_total_display }} · PV: {{ cost_pv_total_display }} · Speicher: {{ cost_bat_total_display }}</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Nach Fahrzeug</h2>
+  <table id="vehicle-table">
+    <thead>
+      <tr>
+        <th>Fahrzeug</th><th class="numeric">Ladevorgänge</th>
+        <th class="numeric">Energie</th><th class="numeric">Netz</th>
+        <th class="numeric">PV</th><th class="numeric">Speicher</th>
+        <th class="numeric">{{ cost_label }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vehicles %}
+      <tr>
+        <td>{{ v.vehicle_name }}</td>
+        <td class="numeric">{{ v.session_count }}</td>
+        <td class="numeric">{{ v.energy_display }}</td>
+        <td class="numeric">{{ v.grid_share_display }}</td>
+        <td class="numeric">{{ v.pv_share_display }}</td>
+        <td class="numeric">{{ v.bat_share_display }}</td>
+        <td class="numeric">{{ v.cost_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script type="application/json" id="stats-data">{{ chart_data_json|safe }}</script>
+<script>renderCharts(JSON.parse(document.getElementById('stats-data').textContent));</script>

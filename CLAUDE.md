@@ -615,57 +615,52 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   request — there's no htmx-native "toggle N other elements" primitive.
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
-  (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as
-  `report_review.html`, now four cards including a "PV-Eigenverbrauch"
-  percentage computed client-side from the period totals: `(pv + bat) /
-  energy`), two Chart.js bar charts fed by `GET /api/statistics` — a
-  stacked one for the grid/PV/battery/chargepoint kWh split
-  (`chart-energy`), and one for cost (`chart-cost`) that mirrors it:
-  under `cost_basis="corrected"`, `chart-cost` is *also* stacked, with
-  Netz-/PV-/Speicher-Kosten datasets in the exact same colors as
-  `chart-energy`'s Netz/PV/Speicher (`#6b7280`/`#16a34a`/`#f59e0b`) fed by
-  `PeriodStats.cost_grid`/`cost_pv`/`cost_bat` — deliberately no
-  "Ladepunkt"/blue series here (chargepoint-sourced cost is already
-  folded into `cost_bat`, see `price_entries.corrected_cost_breakdown`),
-  since blue is `chart-energy`'s "Ladepunkt" color and reusing it for an
-  unrelated cost bar was a real reported inconsistency. A `#cost-breakdown`
-  line under the chart shows the three grand totals (Netz/PV/Speicher
-  summed across all shown periods) so the reader isn't left eyeballing
-  stacked-bar heights to get an overall split. Under `cost_basis="openwb"`
-  there's nothing to split (openWB's own cost was never priced per
-  source), so `chart-cost` falls back to a single flat blue bar (same as
-  before this split existed) and `#cost-breakdown` stays hidden —
-  `currentCostBasis` (set once by `loadCostBasisLabel()` at page load)
-  is what `loadStatistics()` branches on — and a "Nach Fahrzeug" table
-  (from the same response's
-  `by_vehicle`) for comparing vehicles against each other rather than
-  only against time, with per-vehicle Netz/PV/Speicher percentage columns
-  (each `energy_*_kwh / energy_kwh`, client-side, mirroring the stacked
-  chart's split but for one vehicle instead of one period) — the table
-  used to have a single combined "PV-Anteil" (`(pv+bat)/energy`) column,
-  split into three per user feedback wanting grid/PV/battery visible
-  separately, not just self-consumption. Since `cost`/`Kosten` here (the
-  stat card, the chart heading, and the table's own column) is driven by
-  `report_settings`'s app-wide `cost_basis` default (see `web.py`'s
-  `api_statistics`) rather than a per-request choice like
-  `report_review.html`'s generation flow has, all three labels are
-  suffixed with which basis is active (`loadCostBasisLabel()`, fetched
-  once via `GET /api/report-settings` at page load) — added after a user
-  asked "which Kosten are these, real or corrected?" with nothing on the
-  page actually saying so. When that basis is "korrigiert", the figure
-  this page shows is *not quite* the same "korrigiert" a session shows on
-  Übersicht/Bericht erstellen — this page is the one place that also
-  factors in PV-Preis/Batterie-Preis (`web.py`'s `_query_sessions(...,
-  split_pv_bat=True)`), so it prices each session's actual grid/PV/
-  battery mix rather than one flat price_entries rate over the total; see
-  `price_entries.py`'s and `web.py`'s notes for why that split is scoped
-  to this page only. Chart colors (`chartColors()`) are read from the
-  page's own CSS custom properties (`--text`/`--muted`/`--border`) at
-  chart-creation time so both themes render correctly — picked once per
-  `loadStatistics()` call, not live-updated on a theme toggle mid-session
-  (reload picks up the new theme; deliberately not worth the added
-  complexity of hooking into `_settings_modal.html`'s shared toggle
-  handler for a live re-render).
+  (Monatlich/Jährlich), a totals-grid summary (four cards including a
+  "PV-Eigenverbrauch" percentage: `(pv + bat) / energy`), two Chart.js bar
+  charts — a stacked one for the grid/PV/battery/chargepoint kWh split
+  (`chart-energy`), and one for cost (`chart-cost`) that mirrors it: under
+  `cost_basis="corrected"`, `chart-cost` is *also* stacked, Netz-/PV-/
+  Speicher-Kosten in the exact same colors as `chart-energy`'s Netz/PV/
+  Speicher (`#6b7280`/`#16a34a`/`#f59e0b`), deliberately no "Ladepunkt"/
+  blue series (chargepoint-sourced cost is folded into `cost_bat`, see
+  `price_entries.corrected_cost_breakdown`) since blue already means
+  "Ladepunkt" in `chart-energy`'s legend — reusing it for cost was a real
+  reported inconsistency. Under `cost_basis="openwb"` there's nothing to
+  split, so `chart-cost` falls back to one flat blue bar. "Nach Fahrzeug"
+  has per-vehicle Netz/PV/Speicher percentage columns, not a single
+  combined "PV-Anteil" (split per user feedback wanting grid/PV/battery
+  visible separately). The stat card/chart heading/table column are all
+  suffixed with which `cost_basis` is active — added after a user asked
+  "which Kosten are these, real or corrected?" with nothing on the page
+  saying so; this page's own "korrigiert" is *not quite* the same
+  "korrigiert" a session shows on Übersicht/Bericht erstellen, since it's
+  the one place that also factors in PV-Preis/Batterie-Preis (`web.py`'s
+  `_query_sessions(..., split_pv_bat=True)`) — see `price_entries.py`'s
+  and `web.py`'s notes for why that split stays scoped to this page.
+
+  **htmx (Phase 4), the most novel conversion**: `chart-energy`/
+  `chart-cost` are Chart.js canvas draws, not DOM swaps, so there's no
+  direct htmx fragment for them — `GET /hx/statistik` instead returns the
+  stat cards/table/chart headings as ordinary server-rendered HTML
+  (reusing `report_build._fmt_number`/`_fmt_cost`, same as the other
+  phases) **plus** a `<script type="application/json" id="stats-data">`
+  block carrying the same period/vehicle numbers as JSON, and a trailing
+  inline `<script>renderCharts(JSON.parse(...))</script>` — htmx executes
+  `<script>` tags in swapped content by default, so this is a real,
+  supported pattern, just more novel than a plain fragment swap (verified
+  by actually sampling canvas pixel data in Playwright, not just that the
+  `<canvas>` elements exist). `renderCharts()` (the page's persistent
+  `<script>`, called by the fragment's trailing line) is now *only*
+  Chart.js draw calls — no more fetching, no more building table/stat-card
+  HTML, and no more tracked `chartEnergy`/`chartCost` instances to
+  `.destroy()` between renders, since the whole fragment (canvases
+  included) is replaced as one unit each time; the previous canvas and its
+  Chart instance are simply gone together, not stale. `chartColors()`
+  (reads `--text`/`--muted`/`--border` at chart-creation time) is
+  unchanged. Filter form submit/`load` trigger `GET /hx/statistik`
+  targeting `#stats-container`, same pattern as the other phases;
+  `loadSourceFilter()`/`loadVehicleFilter()` (client-side dropdown
+  population) are untouched plain JS.
 
 Header navigation is consistent across pages: a `.brand`/`.brand-icon`
 wrapper puts the same inline lightning-bolt SVG (identical markup to the
