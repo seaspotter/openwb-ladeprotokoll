@@ -1,0 +1,27 @@
+<h3>Berichts-Einstellungen</h3>
+<p class="hint">Gelten für neue Berichte in "Bericht erstellen" — bereits erzeugte PDFs sind davon nicht betroffen. Dies ist die einzige Stelle, an der die PDF-Spalten gewählt werden.</p>
+<form hx-put="/hx/report-settings" hx-target="#report-settings-panel" hx-swap="innerHTML">
+  <p class="muted" style="margin-top: 0;">PDF-Spalten</p>
+  <div class="columns-grid">
+    {% for c in columns %}
+    <label class="check"><input type="checkbox" name="default_columns" value="{{ c.key }}" {{ "checked" if c.checked }}> {{ c.label }}</label>
+    {% endfor %}
+  </div>
+  <div class="inline">
+    <label>Kosten-Spalte zeigt:
+      <select name="cost_basis">
+        <option value="corrected" {{ "selected" if settings.cost_basis == "corrected" }}>korrigierten Preis (Fallback: openWB)</option>
+        <option value="openwb" {{ "selected" if settings.cost_basis == "openwb" }}>openWB-Wert</option>
+      </select>
+    </label>
+    <label>Ausrichtung:
+      <select name="orientation">
+        <option value="portrait" {{ "selected" if settings.orientation == "portrait" }}>Hochkant</option>
+        <option value="landscape" {{ "selected" if settings.orientation == "landscape" }}>Querformat</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="show_signature_line" {{ "checked" if settings.show_signature_line }}> Unterschriftzeile im PDF</label>
+    <button type="submit">Speichern</button>
+  </div>
+</form>
+<p class="muted">{{ "Gespeichert." if saved else (error or "") }}</p>

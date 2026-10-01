@@ -1,0 +1,38 @@
+<div class="panel-header">
+  <h3>Quellen</h3>
+  <button type="button" class="icon-btn" data-toggle-form="add-source-form" title="Quelle hinzufügen">+</button>
+</div>
+<table id="sources-table">
+  <thead>
+    <tr><th>Name</th><th>Adresse</th><th>Aktiv</th><th>Letzter Abruf</th><th>Status</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for s in sources %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td>{{ s.base_url }}</td>
+      <td>{{ "Ja" if s.enabled else "Nein" }}</td>
+      <td>{{ s.last_fetch_at_display }}</td>
+      <td class="{{ 'status-ok' if s.last_fetch_status == 'ok' else ('status-error' if s.last_fetch_status else '') }}">{{ s.last_fetch_status or "–" }}</td>
+      <td>
+        <button type="button" hx-post="/hx/sources/{{ s.id }}/fetch-now" hx-target="#sources-panel" hx-swap="innerHTML">Jetzt abrufen</button>
+        <button type="button" class="danger" hx-delete="/hx/sources/{{ s.id }}" hx-target="#sources-panel" hx-swap="innerHTML" hx-confirm="Quelle wirklich löschen?">Löschen</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<form class="inline add-form" id="add-source-form" hx-post="/hx/sources" hx-target="#sources-panel" hx-swap="innerHTML" {{ "" if error else "hidden" }}>
+  <input type="text" name="name" placeholder="Name (z.B. Zuhause)" value="{{ posted.name or '' }}" required>
+  <input type="text" name="base_url" placeholder="IP-Adresse oder URL" value="{{ posted.base_url or '' }}" required>
+  <button type="submit">Hinzufügen</button>
+</form>
+{% if error %}<p class="muted status-error">{{ error }}</p>{% endif %}
+<div class="inline" style="margin-top: 6px;">
+  <label class="check">
+    <input type="checkbox" name="auto_fetch_enabled" hx-put="/hx/app-settings" hx-trigger="change" hx-target="#sources-panel" hx-swap="innerHTML" {{ "checked" if app_settings.auto_fetch_enabled }}>
+    Automatischer Abruf aktiv
+  </label>
+  <label>um <input type="time" name="auto_fetch_time" hx-put="/hx/app-settings" hx-trigger="change" hx-target="#sources-panel" hx-swap="innerHTML" style="width: 90px;" value="{{ app_settings.auto_fetch_time }}"></label>
+</div>
+<p class="muted">Läuft täglich zur eingestellten Uhrzeit (Zeitzone des Containers) für alle aktiven Quellen.</p>

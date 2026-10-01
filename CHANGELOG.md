@@ -6,6 +6,26 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- Einstellungen dialog converted to htmx (vendored, same pattern as the
+  sibling `openwb-logger`/`knxpilot` projects): Quellen, Preise,
+  Fahrzeuge, Verlauf abrufen, and Berichts-Einstellungen are now
+  server-rendered fragments instead of client JSON+JS -- every form
+  posts/puts/deletes directly via `hx-*` attributes, no more manual
+  `fetch()`/DOM-rebuilding JS per panel. Update stays plain JS by design
+  (its restart-poll-then-reload behavior doesn't fit the swap model
+  cleanly). No user-visible behavior change; price entries now show
+  their source name without a client-side lookup table, since it's
+  resolved server-side.
+
+### Fixed
+- `price_entries.decide_price` recomputed its own cost breakdown a
+  second time in `web.py` just to get the per-source components --
+  `PriceDecision` now carries the `CostBreakdown` it already computed
+  internally. Also trimmed several narrated-history comments down to
+  their load-bearing "why" (that detail belongs in git history, not a
+  standing code comment).
+
 ## [0.3.1] - 2026-09-16
 
 ### Fixed

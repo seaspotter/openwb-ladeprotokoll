@@ -1,0 +1,47 @@
+<div class="panel-header">
+  <h3>Preise</h3>
+  <button type="button" class="icon-btn" data-toggle-form="add-price-form" title="Preis hinzufügen">+</button>
+</div>
+<form class="inline" hx-put="/hx/report-settings/pv-bat-price" hx-target="#prices-panel" hx-swap="innerHTML">
+  <label>PV-Preis (€/kWh): <input type="number" name="pv_price_per_kwh" step="0.0001" min="0" style="width: 90px;" value="{{ pv_price_per_kwh }}"></label>
+  <label>Batterie-Preis (€/kWh): <input type="number" name="bat_price_per_kwh" step="0.0001" min="0" style="width: 90px;" value="{{ bat_price_per_kwh }}"></label>
+  <button type="submit">Speichern</button>
+  <span class="muted">{{ pv_bat_message or "" }}</span>
+</form>
+<p class="hint">Nur für die Statistik: dort wird jeder Ladevorgang nach seinem tatsächlichen Netz-/PV-/Speicher-Anteil bepreist statt mit einem einzigen Preis über die gesamte Energie -- der Netzanteil weiterhin mit dem passenden Preis unten. Übersicht, Bericht erstellen und PDFs sind davon nicht betroffen.</p>
+<table id="prices-table">
+  <thead>
+    <tr>
+      <th>Anbieter</th><th>Preis/kWh</th><th>Quelle</th><th>Fahrzeug</th>
+      <th>Gültig ab</th><th>Gültig bis</th><th>Notiz</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in prices %}
+    <tr>
+      <td>{{ p.provider }}</td>
+      <td>{{ "%.4f"|format(p.price_per_kwh) }} €</td>
+      <td>{{ p.source_name }}</td>
+      <td>{{ p.vehicle_name or "Alle" }}</td>
+      <td>{{ p.valid_from }}</td>
+      <td>{{ p.valid_to or "offen" }}</td>
+      <td>{{ p.notes or "–" }}</td>
+      <td><button type="button" class="danger" hx-delete="/hx/prices/{{ p.id }}" hx-target="#prices-panel" hx-swap="innerHTML" hx-confirm="Preis wirklich löschen?">Löschen</button></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<form class="inline add-form" id="add-price-form" hx-post="/hx/prices" hx-target="#prices-panel" hx-swap="innerHTML" {{ "" if error else "hidden" }}>
+  <input type="text" name="provider" placeholder="Anbieter" value="{{ posted.provider or '' }}" required>
+  <input type="number" name="price_per_kwh" placeholder="EUR/kWh" step="0.0001" min="0" value="{{ posted.price_per_kwh or '' }}" required>
+  <select name="source_id">
+    <option value="">Alle Quellen</option>
+    {% for s in sources %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  <input type="text" name="vehicle_name" placeholder="Fahrzeug (leer = alle)" value="{{ posted.vehicle_name or '' }}">
+  <input type="date" name="valid_from" value="{{ posted.valid_from or '' }}" required>
+  <input type="date" name="valid_to" placeholder="Gültig bis (offen)" value="{{ posted.valid_to or '' }}">
+  <input type="text" name="notes" placeholder="Notiz (z.B. Vertrag, Tarifname)" value="{{ posted.notes or '' }}">
+  <button type="submit">Hinzufügen</button>
+</form>
+{% if error %}<p class="muted status-error">{{ error }}</p>{% endif %}

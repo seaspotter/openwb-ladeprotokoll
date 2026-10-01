@@ -79,6 +79,14 @@ class VehicleIn(BaseModel):
     license_plate: str | None = None
 
 
+def _fmt_dt_de(dt: datetime | None) -> str:
+    """Matches the JS `toLocaleString('de-DE')` format the hx fragments
+    replace: unpadded day/month, full year, comma, zero-padded H:M:S."""
+    if dt is None:
+        return "–"
+    return f"{dt.day}.{dt.month}.{dt.year}, {dt:%H:%M:%S}"
+
+
 def _source_row(r) -> dict:
     return {
         "id": r["id"],
@@ -177,6 +185,95 @@ async def api_update_app_settings(patch: dict):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+# ---------------------------------------------------------------------------
+# htmx fragment routes for the Einstellungen modal (app/templates/hx/...).
+# Return rendered HTML, not JSON; reuse the same helpers/SQL as the
+# /api/... routes above, which stay untouched for MCP/external consumers.
+# ---------------------------------------------------------------------------
+
+async def _sources_panel_response(
+    request: Request, pool, error: str | None = None, posted: dict | None = None,
+):
+    rows = await pool.fetch("SELECT * FROM sources ORDER BY name")
+    sources = []
+    for r in rows:
+        s = _source_row(r)
+        s["last_fetch_at_display"] = _fmt_dt_de(r["last_fetch_at"])
+        sources.append(s)
+    return templates.TemplateResponse(
+        "hx/sources/panel.html",
+        {
+            "request": request,
+            "sources": sources,
+            "app_settings": await get_app_settings(pool),
+            "error": error,
+            "posted": posted or {},
+        },
+    )
+
+
+@router.get("/hx/sources", response_class=HTMLResponse)
+async def hx_sources(request: Request):
+    return await _sources_panel_response(request, get_pool())
+
+
+@router.post("/hx/sources", response_class=HTMLResponse)
+async def hx_create_source(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    posted = {"name": form.get("name", ""), "base_url": form.get("base_url", "")}
+    try:
+        name = validate_name(form.get("name", ""))
+        base_url = normalize_base_url(form.get("base_url", ""))
+    except SourceValidationError as exc:
+        return await _sources_panel_response(request, pool, error=str(exc), posted=posted)
+    await pool.execute(
+        "INSERT INTO sources (name, base_url, enabled) VALUES ($1, $2, true)", name, base_url,
+    )
+    response = await _sources_panel_response(request, pool)
+    response.headers["HX-Trigger"] = "sources-changed"
+    return response
+
+
+@router.delete("/hx/sources/{source_id}", response_class=HTMLResponse)
+async def hx_delete_source(request: Request, source_id: int):
+    pool = get_pool()
+    await pool.execute("DELETE FROM sources WHERE id = $1", source_id)
+    response = await _sources_panel_response(request, pool)
+    response.headers["HX-Trigger"] = "sources-changed"
+    return response
+
+
+@router.post("/hx/sources/{source_id}/fetch-now", response_class=HTMLResponse)
+async def hx_fetch_now(request: Request, source_id: int):
+    pool = get_pool()
+    source = await _require_source(pool, source_id)
+    result = await fetch_service.fetch_source(pool, source, months=[current_month()])
+    error = None if result.ok else result.error
+    response = await _sources_panel_response(request, pool, error=error)
+    response.headers["HX-Trigger"] = "sources-changed"
+    return response
+
+
+@router.put("/hx/app-settings", response_class=HTMLResponse)
+async def hx_update_app_settings(request: Request):
+    """Each input PUTs independently (not wrapped in one <form>, so htmx
+    only sends that one field) -- HX-Trigger-Name (htmx sets it to the
+    triggering element's `name`) says which one fired. A checkbox's
+    absence from the form means unchecked (standard HTML)."""
+    pool = get_pool()
+    form = await request.form()
+    if request.headers.get("HX-Trigger-Name") == "auto_fetch_enabled":
+        patch = {"auto_fetch_enabled": "auto_fetch_enabled" in form}
+    else:
+        patch = {"auto_fetch_time": form.get("auto_fetch_time", "")}
+    try:
+        await update_app_settings(pool, patch)
+    except AppSettingsError as exc:
+        return await _sources_panel_response(request, pool, error=str(exc))
+    return await _sources_panel_response(request, pool)
+
+
 def _price_row(r) -> dict:
     return {
         "id": r["id"],
@@ -262,6 +359,91 @@ async def api_delete_price(price_id: int):
     return {"ok": True}
 
 
+async def _prices_panel_response(
+    request: Request, pool, error: str | None = None, pv_bat_message: str | None = None,
+    posted: dict | None = None,
+):
+    rows = await pool.fetch(
+        "SELECT p.*, s.name AS source_name FROM price_entries p "
+        "LEFT JOIN sources s ON s.id = p.source_id ORDER BY p.valid_from DESC"
+    )
+    prices = []
+    for r in rows:
+        p = _price_row(r)
+        p["source_name"] = r["source_name"] or "Alle"
+        prices.append(p)
+    sources = await pool.fetch("SELECT id, name FROM sources ORDER BY name")
+    settings = await get_report_settings(pool)
+    return templates.TemplateResponse(
+        "hx/prices/panel.html",
+        {
+            "request": request,
+            "prices": prices,
+            "sources": sources,
+            "pv_price_per_kwh": settings["pv_price_per_kwh"],
+            "bat_price_per_kwh": settings["bat_price_per_kwh"],
+            "error": error,
+            "pv_bat_message": pv_bat_message,
+            "posted": posted or {},
+        },
+    )
+
+
+@router.get("/hx/prices", response_class=HTMLResponse)
+async def hx_prices(request: Request):
+    return await _prices_panel_response(request, get_pool())
+
+
+@router.post("/hx/prices", response_class=HTMLResponse)
+async def hx_create_price(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    source_val = form.get("source_id") or None
+    posted = {k: form.get(k, "") for k in (
+        "provider", "price_per_kwh", "vehicle_name", "valid_from", "valid_to", "notes",
+    )}
+    try:
+        await pool.execute(
+            "INSERT INTO price_entries "
+            "(source_id, vehicle_name, provider, price_per_kwh, valid_from, valid_to, notes) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            int(source_val) if source_val else None,
+            form.get("vehicle_name") or None,
+            form.get("provider", ""),
+            float(form.get("price_per_kwh", 0) or 0),
+            date.fromisoformat(form.get("valid_from", "")),
+            date.fromisoformat(form["valid_to"]) if form.get("valid_to") else None,
+            form.get("notes") or None,
+        )
+    except (ValueError, KeyError) as exc:
+        return await _prices_panel_response(
+            request, pool, error=f"Ungültige Eingabe: {exc}", posted=posted,
+        )
+    return await _prices_panel_response(request, pool)
+
+
+@router.delete("/hx/prices/{price_id}", response_class=HTMLResponse)
+async def hx_delete_price(request: Request, price_id: int):
+    pool = get_pool()
+    await pool.execute("DELETE FROM price_entries WHERE id = $1", price_id)
+    return await _prices_panel_response(request, pool)
+
+
+@router.put("/hx/report-settings/pv-bat-price", response_class=HTMLResponse)
+async def hx_update_pv_bat_price(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    try:
+        patch = {
+            "pv_price_per_kwh": float(form.get("pv_price_per_kwh", 0) or 0),
+            "bat_price_per_kwh": float(form.get("bat_price_per_kwh", 0) or 0),
+        }
+        await update_report_settings(pool, patch)
+    except (ValueError, ReportSettingsError) as exc:
+        return await _prices_panel_response(request, pool, error=str(exc))
+    return await _prices_panel_response(request, pool, pv_bat_message="Gespeichert.")
+
+
 async def _require_source(pool, source_id: int):
     row = await pool.fetchrow("SELECT * FROM sources WHERE id = $1", source_id)
     if not row:
@@ -291,6 +473,50 @@ async def api_backfill(source_id: int, body: BackfillIn):
     if not result.ok:
         raise HTTPException(status_code=502, detail=result.error)
     return {"ok": True, "sessions_upserted": result.sessions_upserted}
+
+
+async def _backfill_panel_response(request: Request, pool, result_message: str | None = None):
+    sources = await pool.fetch("SELECT id, name FROM sources ORDER BY name")
+    return templates.TemplateResponse(
+        "hx/backfill/panel.html",
+        {"request": request, "sources": sources, "result_message": result_message},
+    )
+
+
+@router.get("/hx/backfill", response_class=HTMLResponse)
+async def hx_backfill_form(request: Request):
+    return await _backfill_panel_response(request, get_pool())
+
+
+@router.post("/hx/backfill", response_class=HTMLResponse)
+async def hx_backfill_run(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    source_val = form.get("source_id") or None
+    if not source_val:
+        return await _backfill_panel_response(
+            request, pool, result_message="Bitte eine Quelle wählen.",
+        )
+    source = await pool.fetchrow("SELECT * FROM sources WHERE id = $1", int(source_val))
+    if not source:
+        return await _backfill_panel_response(
+            request, pool, result_message="Quelle nicht gefunden.",
+        )
+    try:
+        from_month = form.get("from_month", "").replace("-", "")
+        to_month = form.get("to_month", "").replace("-", "")
+        months = month_range(from_month, to_month)
+    except ValueError as exc:
+        return await _backfill_panel_response(request, pool, result_message=f"Fehler: {exc}")
+    result = await fetch_service.fetch_source(pool, source, months=months)
+    message = (
+        f"Fertig: {result.sessions_upserted} Ladevorgänge verarbeitet."
+        if result.ok else f"Fehler: {result.error}"
+    )
+    response = await _backfill_panel_response(request, pool, result_message=message)
+    if result.ok:
+        response.headers["HX-Trigger"] = "sources-changed"
+    return response
 
 
 async def _query_sessions(
@@ -437,6 +663,40 @@ async def api_update_vehicle(vehicle_name: str, body: VehicleIn):
     return {"vehicle_name": row["vehicle_name"], "license_plate": row["license_plate"]}
 
 
+async def _vehicles_panel_response(request: Request, pool, saved: str | None = None):
+    rows = await pool.fetch(
+        "SELECT s.vehicle_name, v.license_plate "
+        "FROM (SELECT DISTINCT vehicle_name FROM sessions WHERE vehicle_name IS NOT NULL) s "
+        "LEFT JOIN vehicles v ON v.vehicle_name = s.vehicle_name "
+        "ORDER BY s.vehicle_name"
+    )
+    vehicles = [
+        {"vehicle_name": r["vehicle_name"], "license_plate": r["license_plate"]} for r in rows
+    ]
+    return templates.TemplateResponse(
+        "hx/vehicles/panel.html",
+        {"request": request, "vehicles": vehicles, "saved": saved},
+    )
+
+
+@router.get("/hx/vehicles", response_class=HTMLResponse)
+async def hx_vehicles(request: Request):
+    return await _vehicles_panel_response(request, get_pool())
+
+
+@router.put("/hx/vehicles/{vehicle_name}", response_class=HTMLResponse)
+async def hx_update_vehicle(request: Request, vehicle_name: str):
+    pool = get_pool()
+    form = await request.form()
+    await pool.execute(
+        "INSERT INTO vehicles (vehicle_name, license_plate, updated_at) "
+        "VALUES ($1, $2, now()) "
+        "ON CONFLICT (vehicle_name) DO UPDATE SET license_plate = $2, updated_at = now()",
+        vehicle_name, form.get("license_plate") or None,
+    )
+    return await _vehicles_panel_response(request, pool, saved=vehicle_name)
+
+
 @router.get("/api/statistics")
 async def api_statistics(
     granularity: str = "month",
@@ -488,6 +748,45 @@ async def api_update_report_settings(patch: dict):
         return await update_report_settings(pool, patch)
     except ReportSettingsError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+async def _report_settings_panel_response(
+    request: Request, pool, error: str | None = None, saved: bool = False,
+):
+    settings = await get_report_settings(pool)
+    columns = [
+        {"key": k, "label": v, "checked": k in settings["default_columns"]}
+        for k, v in COLUMN_LABELS.items()
+    ]
+    return templates.TemplateResponse(
+        "hx/report_settings/panel.html",
+        {
+            "request": request, "columns": columns, "settings": settings,
+            "error": error, "saved": saved,
+        },
+    )
+
+
+@router.get("/hx/report-settings", response_class=HTMLResponse)
+async def hx_report_settings(request: Request):
+    return await _report_settings_panel_response(request, get_pool())
+
+
+@router.put("/hx/report-settings", response_class=HTMLResponse)
+async def hx_update_report_settings(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    patch = {
+        "default_columns": form.getlist("default_columns"),
+        "cost_basis": form.get("cost_basis", ""),
+        "orientation": form.get("orientation", ""),
+        "show_signature_line": "show_signature_line" in form,
+    }
+    try:
+        await update_report_settings(pool, patch)
+    except ReportSettingsError as exc:
+        return await _report_settings_panel_response(request, pool, error=str(exc))
+    return await _report_settings_panel_response(request, pool, saved=True)
 
 
 def _to_float(value) -> float | None:
@@ -800,3 +1099,51 @@ def api_update_check():
 @router.post("/api/update")
 def api_update(background_tasks: BackgroundTasks):
     return run_update(background_tasks)
+
+
+def _update_panel_context(request: Request, *, state: str = "idle", msg: str | None = None) -> dict:
+    return {
+        "request": request,
+        "state": state,
+        "current_commit": get_current_version(),
+        "available": self_update_available(),
+        "msg": msg,
+    }
+
+
+@router.get("/hx/update", response_class=HTMLResponse)
+def hx_update(request: Request):
+    return templates.TemplateResponse("hx/update/panel.html", _update_panel_context(request))
+
+
+@router.post("/hx/update/check", response_class=HTMLResponse)
+def hx_update_check(request: Request):
+    data = check_for_update()
+    if data["error"]:
+        msg = "Prüfung fehlgeschlagen: " + data["error"]
+    elif data["update_available"]:
+        msg = f"Update verfügbar ({data['current']} → {data['latest']})"
+    else:
+        msg = f"Aktuell ({data['current']})"
+    return templates.TemplateResponse(
+        "hx/update/msg.html", {"request": request, "msg": msg},
+    )
+
+
+@router.post("/hx/update/run", response_class=HTMLResponse)
+def hx_update_run(request: Request, background_tasks: BackgroundTasks):
+    result = run_update(background_tasks)
+    if not result["ok"]:
+        ctx = _update_panel_context(request, msg="Update fehlgeschlagen: " + result["message"])
+    elif result["restarting"]:
+        ctx = _update_panel_context(request, state="restarting", msg="Startet neu...")
+    else:
+        ctx = _update_panel_context(request, msg=result["message"])
+    return templates.TemplateResponse("hx/update/panel.html", ctx)
+
+
+@router.get("/hx/update/ping", response_class=HTMLResponse)
+def hx_update_ping(request: Request):
+    """Only reachable once the restarted process is actually back up --
+    the response body itself is what tells the browser to reload."""
+    return templates.TemplateResponse("hx/update/ping.html", {"request": request})

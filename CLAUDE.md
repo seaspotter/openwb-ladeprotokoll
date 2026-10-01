@@ -447,12 +447,11 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
 - `app/templates/_settings_modal.html` — a Jinja partial (`{% include %}`,
   **not** a route — there is no `/settings` page; an earlier version had
   one, replaced after explicit user feedback to match a gear-icon-opens-
-  a-popup pattern from this author's other projects), included by both
-  `index.html` and `report_review.html` right before each page's own
-  `<script>` (load-order matters: the partial's `<script>` defines the
-  shared `api()` helper and `loadSources()`/`loadPrices()`/
-  `loadReportSettings()` that the host page's own script calls, so it must
-  come first in document order). Opened via a gear button
+  a-popup pattern from this author's other projects), included by
+  `index.html`, `report_review.html`, and `statistik.html` right before
+  each page's own `<script>` (load-order matters: the partial's `<script>`
+  defines the shared `api()` helper the host page's own script still calls
+  for everything not yet htmx-converted). Opened via a gear button
   (`[data-open-settings]`, `&#9881;` glyph) in each page's header; a
   sun/moon button (`[data-theme-toggle]`, `id="theme-toggle"`) next to it
   is an explicit light/dark override on top of the CSS
@@ -491,44 +490,57 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   previously the one input in the modal with no border/background/
   padding at all, plain browser default sitting next to styled siblings).
   Panel order is Quellen, Preise, Fahrzeuge, Verlauf abrufen,
-  Berichts-Einstellungen, Update (Fahrzeuge added between Preise and
-  Verlauf abrufen since both Preise and Fahrzeuge key off vehicle names;
-  Update is last since it's app-wide maintenance, not report/session
-  configuration — don't reorder without reason). Source/price entry add-forms are collapsed
-  behind a "+" icon button per panel, toggled via `el.hidden = !el.hidden`
-  — **the modal's own `<style>` includes `[hidden] { display: none
-  !important; }`**, needed because `.inline { display: flex }` (the
-  add-forms carry that class) otherwise wins the specificity fight against
-  the browser's default `[hidden]` rule and the form stays visible
-  regardless of the `hidden` attribute; this was a real shipped bug,
-  caught from a screenshot showing the form always open. The Quellen panel
-  also has the "Automatischer Abruf aktiv" checkbox + a `<input
-  type="time">` (`loadAppSettings()`, `GET/PUT /api/app-settings`) right
-  where the old static explanatory text about the background scheduler
-  used to sit — both save instantly on `change` (no separate "Speichern"
-  button; a native time input's `change` event only fires once a value is
-  committed, not per keystroke, so this doesn't spam the API). Price
-  entries have a `notes` field here (form + table column) — an unlabeled
-  provider+date-range row is meaningless months later. Right above the
-  price-entries table sits a small always-visible `#pv-bat-price-form`
-  (PV-Preis/Batterie-Preis, €/kWh) with its own instant "Speichern" —
-  despite being stored in `report_settings` (see that module's note on
-  why), it lives in the **Preise** panel, not "Berichts-Einstellungen",
-  since a user asked for it "on top at the other prices" rather than
-  buried at the bottom of a report-formatting panel; the hint text right
-  below it says explicitly this only affects `/statistik`, not
-  Übersicht/Bericht erstellen/PDFs — an earlier version wired the same
-  two fields into every price decision app-wide, which the user did not
-  want (see `web.py`'s `split_pv_bat` note). The "Fahrzeuge"
-  panel (`loadVehicles()`, `GET /api/vehicles`, `PUT
-  /api/vehicles/{name}`) lists every vehicle name ever seen with an
-  editable Kennzeichen input and a per-row "Speichern" button — a small
-  enough list (one row per vehicle, not per session) that per-row save
-  beats trying to track which rows changed for one bulk save. "Berichts-
-  Einstellungen" (`GET/PUT /api/report-settings`) is the **only** place
-  PDF columns are chosen — `report_review.html` used to have its own
-  second column checklist too, which was confusing (two places to set
-  the same thing) and is gone; see `report_settings.py`.
+  Berichts-Einstellungen, Update (Fahrzeuge keys off vehicle names like
+  Preise; Update is last, app-wide maintenance not report/session config
+  — don't reorder without reason).
+
+  **htmx (2026-10): every panel except Update is a server-rendered
+  fragment**, not client JSON+JS. htmx is vendored at
+  `app/static/vendor/htmx-2.0.11.min.js` (copied from `openwb-logger`'s
+  own already-audited copy, not CDN-fetched — matches this app's
+  zero-external-network-dependency rule). Each panel is a thin wrapper
+  div (e.g. `<div id="prices-panel" hx-get="/hx/prices" hx-trigger=
+  "modal-opened from:body once, sources-changed from:body">`) that loads
+  once the gear button dispatches a `modal-opened` event on `document.body`
+  (not `hx-trigger="load"` — the dialog is static markup present at page
+  load, so a plain `load` trigger would fetch every panel before the
+  modal is ever opened). Fragment templates live under
+  `app/templates/hx/<panel>/*.html`; routes are `GET/POST/PUT/DELETE
+  /hx/<panel>` in `web.py`, reusing the same SQL/helpers as the
+  `/api/...` JSON routes (which stay, for MCP/external consumers) —
+  each `/hx/...` mutation re-renders and returns the **whole panel**, so
+  the response is always self-consistent. Forms use `hx-post`/`hx-put`/
+  `hx-delete` directly with `hx-confirm` for destructive actions (native
+  `confirm()`, same as this project's own convention — not
+  `openwb-logger`'s custom `showConfirm()` modal) — **no manual
+  `fetch`/`addEventListener('submit', ...)` per form any more**. Cross-
+  panel coordination (e.g. Preise/Verlauf-abrufen's source `<select>`
+  needing to know about a source added in the Quellen panel) uses the
+  `HX-Trigger` response header (`sources-changed`), the same technique
+  `openwb-logger` uses for `settings-changed`; `index.html`'s own
+  `onSourcesChanged()` listens for it too, to refresh its filter dropdown.
+  Since `/hx/...` POST/PUT bodies are form-encoded (htmx's default, not
+  JSON), two inputs that aren't inside a shared `<form>` each PUT
+  independently with only their own value — `web.py`'s
+  `hx_update_app_settings` reads `HX-Trigger-Name` (which htmx sets to the
+  triggering element's own `name`) to know which single field changed,
+  rather than assuming both are always present. The one still-manual bit
+  is the "+"-toggle for add-forms: a single delegated click listener on
+  `.modal-body` (never itself replaced, unlike its htmx-swapped children)
+  handles every `[data-toggle-form]` button regardless of which panel
+  re-renders — binding per-element listeners instead would break after
+  the first re-render, exactly the regression `openwb-logger`'s own
+  Settings conversion hit (commit `ae32065`: top-level
+  `getElementById(...).addEventListener(...)` against elements that don't
+  exist yet pre-first-render). **Update stays plain JS by design**, not
+  an oversight: its "poll for restart, then reload" behavior is mostly
+  htmx-native (`/hx/update/ping`'s `hx-trigger="load delay:1s, every 2s"`
+  — the endpoint only answers at all once the restarted process is back
+  up, and its response is `<script>location.reload()</script>`), but the
+  bounded give-up-after-~30-attempts fallback (so a genuinely failed
+  restart doesn't poll silently forever) needs a `htmx:sendError`/
+  `htmx:responseError` listener, since htmx's own interval trigger has no
+  built-in retry limit.
 - `app/templates/report_review.html` — session/price-override selection UI
   (`/report-review`): filters (source/vehicle/chargepoint/date, same
   dropdown-not-free-text pattern as `index.html`) load sessions via

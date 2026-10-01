@@ -1,0 +1,13 @@
+<h3>Verlauf abrufen</h3>
+<p class="hint">Holt Ladeprotokolle für zurückliegende Monate nach — der automatische Abruf und "Jetzt abrufen" erfassen immer nur den aktuellen Monat.</p>
+<form class="inline" hx-post="/hx/backfill" hx-target="#backfill-panel" hx-swap="innerHTML">
+  <select name="source_id" required>
+    <option value="">Quelle wählen</option>
+    {% for s in sources %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  <input type="month" name="from_month" required>
+  <span class="muted">bis</span>
+  <input type="month" name="to_month" required>
+  <button type="submit">Abrufen</button>
+</form>
+<p class="muted">{{ result_message or "" }}</p>

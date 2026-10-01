@@ -1,3 +1,4 @@
+<script src="/static/vendor/htmx-2.0.11.min.js"></script>
 <style>
   /* [hidden] alone loses to any selector that sets `display` with equal or
      higher specificity (e.g. `.inline { display: flex }` on a form that
@@ -104,121 +105,28 @@
   <div class="modal-body">
 
     <div class="panel">
-      <div class="panel-header">
-        <h3>Quellen</h3>
-        <button type="button" class="icon-btn" id="toggle-add-source" title="Quelle hinzufügen">+</button>
-      </div>
-      <table id="sources-table">
-        <thead>
-          <tr><th>Name</th><th>Adresse</th><th>Aktiv</th><th>Letzter Abruf</th><th>Status</th><th></th></tr>
-        </thead>
-        <tbody id="sources-body"></tbody>
-      </table>
-      <form class="inline add-form" id="add-source-form" hidden>
-        <input type="text" id="new-name" placeholder="Name (z.B. Zuhause)" required>
-        <input type="text" id="new-base-url" placeholder="IP-Adresse oder URL" required>
-        <button type="submit">Hinzufügen</button>
-      </form>
-      <p class="muted" id="add-source-error"></p>
-      <div class="inline" style="margin-top: 6px;">
-        <label class="check">
-          <input type="checkbox" id="auto-fetch-enabled"> Automatischer Abruf aktiv
-        </label>
-        <label>um <input type="time" id="auto-fetch-time" style="width: 90px;"></label>
-      </div>
-      <p class="muted">Läuft täglich zur eingestellten Uhrzeit (Zeitzone des Containers) für alle aktiven Quellen.</p>
+      <div id="sources-panel" hx-get="/hx/sources" hx-trigger="modal-opened from:body once, sources-changed from:body" hx-swap="innerHTML"></div>
     </div>
 
     <div class="panel">
-      <div class="panel-header">
-        <h3>Preise</h3>
-        <button type="button" class="icon-btn" id="toggle-add-price" title="Preis hinzufügen">+</button>
-      </div>
-      <form class="inline" id="pv-bat-price-form">
-        <label>PV-Preis (€/kWh): <input type="number" id="pv-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
-        <label>Batterie-Preis (€/kWh): <input type="number" id="bat-price-per-kwh" step="0.0001" min="0" style="width: 90px;"></label>
-        <button type="submit">Speichern</button>
-        <span class="muted" id="pv-bat-price-result"></span>
-      </form>
-      <p class="hint">Nur für die Statistik: dort wird jeder Ladevorgang nach seinem tatsächlichen Netz-/PV-/Speicher-Anteil bepreist statt mit einem einzigen Preis über die gesamte Energie -- der Netzanteil weiterhin mit dem passenden Preis unten. Übersicht, Bericht erstellen und PDFs sind davon nicht betroffen.</p>
-      <table id="prices-table">
-        <thead>
-          <tr>
-            <th>Anbieter</th><th>Preis/kWh</th><th>Quelle</th><th>Fahrzeug</th>
-            <th>Gültig ab</th><th>Gültig bis</th><th>Notiz</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="prices-body"></tbody>
-      </table>
-      <form class="inline add-form" id="add-price-form" hidden>
-        <input type="text" id="new-provider" placeholder="Anbieter" required>
-        <input type="number" id="new-price-per-kwh" placeholder="EUR/kWh" step="0.0001" min="0" required>
-        <select id="new-price-source"><option value="">Alle Quellen</option></select>
-        <input type="text" id="new-price-vehicle" placeholder="Fahrzeug (leer = alle)">
-        <input type="date" id="new-price-valid-from" required>
-        <input type="date" id="new-price-valid-to" placeholder="Gültig bis (offen)">
-        <input type="text" id="new-price-notes" placeholder="Notiz (z.B. Vertrag, Tarifname)">
-        <button type="submit">Hinzufügen</button>
-      </form>
-      <p class="muted" id="add-price-error"></p>
+      <div id="prices-panel" hx-get="/hx/prices" hx-trigger="modal-opened from:body once, sources-changed from:body" hx-swap="innerHTML"></div>
     </div>
 
     <div class="panel">
-      <h3>Fahrzeuge</h3>
-      <p class="hint">Kennzeichen je Fahrzeug -- wird im PDF-Bericht bei "Fahrzeug(e)" mit ausgegeben. openWB selbst liefert kein Kennzeichen, das ist rein hier gepflegte Zusatzangabe.</p>
-      <table id="vehicles-table">
-        <thead>
-          <tr><th>Fahrzeug</th><th>Kennzeichen</th><th></th></tr>
-        </thead>
-        <tbody id="vehicles-body"></tbody>
-      </table>
-      <p class="muted" id="vehicles-empty" hidden>Noch keine Fahrzeuge bekannt -- dafür muss zuerst mindestens ein Ladevorgang abgerufen worden sein.</p>
+      <div id="vehicles-panel" hx-get="/hx/vehicles" hx-trigger="modal-opened from:body once" hx-swap="innerHTML"></div>
     </div>
 
     <div class="panel">
-      <h3>Verlauf abrufen</h3>
-      <p class="hint">Holt Ladeprotokolle für zurückliegende Monate nach — der automatische Abruf und "Jetzt abrufen" erfassen immer nur den aktuellen Monat.</p>
-      <form class="inline" id="backfill-form">
-        <select id="backfill-source" required></select>
-        <input type="month" id="backfill-from" required>
-        <span class="muted">bis</span>
-        <input type="month" id="backfill-to" required>
-        <button type="submit">Abrufen</button>
-      </form>
-      <p class="muted" id="backfill-result"></p>
+      <div id="backfill-panel" hx-get="/hx/backfill" hx-trigger="modal-opened from:body once, sources-changed from:body" hx-swap="innerHTML"></div>
     </div>
 
     <div class="panel">
-      <h3>Berichts-Einstellungen</h3>
-      <p class="hint">Gelten für neue Berichte in "Bericht erstellen" — bereits erzeugte PDFs sind davon nicht betroffen. Dies ist die einzige Stelle, an der die PDF-Spalten gewählt werden.</p>
-      <p class="muted" style="margin-top: 0;">PDF-Spalten</p>
-      <div class="columns-grid" id="report-columns-grid"></div>
-      <form class="inline" id="report-settings-form">
-        <label>Kosten-Spalte zeigt:
-          <select id="cost-basis">
-            <option value="corrected">korrigierten Preis (Fallback: openWB)</option>
-            <option value="openwb">openWB-Wert</option>
-          </select>
-        </label>
-        <label>Ausrichtung:
-          <select id="orientation">
-            <option value="portrait">Hochkant</option>
-            <option value="landscape">Querformat</option>
-          </select>
-        </label>
-        <label class="check"><input type="checkbox" id="show-signature-line"> Unterschriftzeile im PDF</label>
-        <button type="submit">Speichern</button>
-      </form>
-      <p class="muted" id="report-settings-result"></p>
+      <div id="report-settings-panel" hx-get="/hx/report-settings" hx-trigger="modal-opened from:body once" hx-swap="innerHTML"></div>
     </div>
 
     <div class="panel">
       <h3>Update</h3>
-      <div class="inline" id="update-info" style="display: flex; align-items: center; gap: 8px;">
-        <span class="muted" id="update-commit" style="font-family: monospace;">–</span>
-        <button type="button" id="update-check">Nach Updates suchen</button>
-        <button type="button" id="update-btn">Update</button>
-      </div>
+      <div id="update-panel" hx-get="/hx/update" hx-trigger="modal-opened from:body once" hx-swap="innerHTML"></div>
       <p class="muted" id="update-msg"></p>
     </div>
 
@@ -237,390 +145,42 @@ async function api(url, opts) {
   return isJson ? resp.json() : resp.text();
 }
 
-function fmtDate(iso) {
-  if (!iso) return '–';
-  return new Date(iso).toLocaleString('de-DE');
-}
-
-let sourcesById = {};
-
-async function loadSources() {
-  const { sources } = await api('/api/sources');
-  sourcesById = Object.fromEntries(sources.map((s) => [s.id, s]));
-
-  const body = document.getElementById('sources-body');
-  body.innerHTML = '';
-  for (const s of sources) {
-    const tr = document.createElement('tr');
-    const statusClass = s.last_fetch_status === 'ok' ? 'status-ok'
-      : (s.last_fetch_status ? 'status-error' : '');
-    tr.innerHTML = `
-      <td>${s.name}</td>
-      <td>${s.base_url}</td>
-      <td>${s.enabled ? 'Ja' : 'Nein'}</td>
-      <td>${fmtDate(s.last_fetch_at)}</td>
-      <td class="${statusClass}">${s.last_fetch_status || '–'}</td>
-      <td>
-        <button data-action="fetch" data-id="${s.id}">Jetzt abrufen</button>
-        <button data-action="delete" data-id="${s.id}" class="danger">Löschen</button>
-      </td>
-    `;
-    body.appendChild(tr);
-  }
-
-  for (const selectId of ['new-price-source', 'backfill-source']) {
-    const select = document.getElementById(selectId);
-    const current = select.value;
-    select.innerHTML = selectId === 'new-price-source' ? '<option value="">Alle Quellen</option>' : '';
-    for (const s of sources) {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.name;
-      select.appendChild(opt);
-    }
-    select.value = current;
-  }
-
-  if (typeof onSourcesChanged === 'function') onSourcesChanged(sources);
-}
-
-async function loadPrices() {
-  const { prices } = await api('/api/prices');
-  const body = document.getElementById('prices-body');
-  body.innerHTML = '';
-  for (const p of prices) {
-    const tr = document.createElement('tr');
-    const sourceName = p.source_id ? (sourcesById[p.source_id]?.name || `#${p.source_id}`) : 'Alle';
-    tr.innerHTML = `
-      <td>${p.provider}</td>
-      <td>${p.price_per_kwh.toFixed(4)} €</td>
-      <td>${sourceName}</td>
-      <td>${p.vehicle_name || 'Alle'}</td>
-      <td>${p.valid_from}</td>
-      <td>${p.valid_to || 'offen'}</td>
-      <td>${p.notes || '–'}</td>
-      <td><button data-action="delete-price" data-id="${p.id}" class="danger">Löschen</button></td>
-    `;
-    body.appendChild(tr);
-  }
-}
-
-async function loadAppSettings() {
-  const settings = await api('/api/app-settings');
-  document.getElementById('auto-fetch-enabled').checked = settings.auto_fetch_enabled;
-  const timeInput = document.getElementById('auto-fetch-time');
-  timeInput.value = settings.auto_fetch_time;
-  timeInput.dataset.previous = settings.auto_fetch_time;
-}
-
-async function saveAppSetting(patch, revert) {
-  try {
-    await api('/api/app-settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-  } catch (err) {
-    revert();
-    alert('Speichern fehlgeschlagen: ' + err.message);
-  }
-}
-
-document.getElementById('auto-fetch-enabled').addEventListener('change', (ev) => {
-  const checkbox = ev.target;
-  const desired = checkbox.checked;
-  saveAppSetting({ auto_fetch_enabled: desired }, () => { checkbox.checked = !desired; });
-});
-
-document.getElementById('auto-fetch-time').addEventListener('change', (ev) => {
-  const input = ev.target;
-  const previous = input.dataset.previous || input.value;
-  if (!input.value) { input.value = previous; return; }
-  saveAppSetting({ auto_fetch_time: input.value }, () => { input.value = previous; });
-  input.dataset.previous = input.value;
-});
-
-async function loadVehicles() {
-  const { vehicles } = await api('/api/vehicles');
-  const body = document.getElementById('vehicles-body');
-  document.getElementById('vehicles-empty').hidden = vehicles.length > 0;
-  body.innerHTML = '';
-  for (const v of vehicles) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${v.vehicle_name}</td>
-      <td><input type="text" data-vehicle-plate="${v.vehicle_name}" value="${v.license_plate || ''}" placeholder="z.B. AB-CD 123"></td>
-      <td><button data-action="save-vehicle" data-vehicle="${v.vehicle_name}">Speichern</button></td>
-    `;
-    body.appendChild(tr);
-  }
-}
-
-async function loadReportSettings() {
-  const { columns } = await api('/api/report-columns');
-  const settings = await api('/api/report-settings');
-  const grid = document.getElementById('report-columns-grid');
-  grid.innerHTML = '';
-  for (const c of columns) {
-    const checked = settings.default_columns.includes(c.key);
-    const label = document.createElement('label');
-    label.className = 'check';
-    label.innerHTML = `<input type="checkbox" data-column="${c.key}" ${checked ? 'checked' : ''}> ${c.label}`;
-    grid.appendChild(label);
-  }
-  document.getElementById('cost-basis').value = settings.cost_basis;
-  document.getElementById('orientation').value = settings.orientation;
-  document.getElementById('show-signature-line').checked = settings.show_signature_line;
-  document.getElementById('pv-price-per-kwh').value = settings.pv_price_per_kwh;
-  document.getElementById('bat-price-per-kwh').value = settings.bat_price_per_kwh;
-}
-
-async function loadUpdateInfo() {
-  document.getElementById('update-msg').textContent = '';
-  const data = await api('/api/update/version');
-  document.getElementById('update-commit').textContent = data.current_commit || '–';
-  // Hidden, not just disabled, when there's no bind-mounted git checkout to
-  // update in place (e.g. a plain image-only deployment, like on Synology
-  // Container Manager) -- a permanently dead button is clutter, not a
-  // useful affordance to grey out.
-  document.getElementById('update-check').hidden = !data.available;
-  document.getElementById('update-btn').hidden = !data.available;
-}
-
-document.getElementById('update-check').addEventListener('click', async () => {
-  const msgEl = document.getElementById('update-msg');
-  msgEl.textContent = 'Suche nach Updates...';
-  const data = await api('/api/update/check');
-  msgEl.textContent = data.error
-    ? 'Prüfung fehlgeschlagen: ' + data.error
-    : data.update_available
-      ? `Update verfügbar (${data.current} → ${data.latest})`
-      : `Aktuell (${data.current})`;
-});
-
-async function waitForUpdateRestartThenReload() {
-  // docker-compose's `restart: unless-stopped` brings the process back
-  // within a second or two -- poll a cheap existing endpoint until it
-  // answers again, then reload so the (possibly also-updated) frontend
-  // gets refreshed too.
-  const msgEl = document.getElementById('update-msg');
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    try {
-      if ((await fetch('/api/sources')).ok) { window.location.reload(); return; }
-    } catch (err) { /* still restarting */ }
-  }
-  msgEl.textContent = 'Startet noch... bitte in Kürze manuell neu laden.';
-}
-
-document.getElementById('update-btn').addEventListener('click', async () => {
-  if (!confirm('Neueste Version laden und die Anwendung jetzt neu starten?')) return;
-  const btn = document.getElementById('update-btn');
-  const msgEl = document.getElementById('update-msg');
-  btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = 'Wird aktualisiert...';
-  try {
-    const result = await api('/api/update', { method: 'POST' });
-    if (!result.ok) {
-      msgEl.textContent = 'Update fehlgeschlagen: ' + result.message;
-      return;
-    }
-    if (result.restarting) {
-      msgEl.textContent = 'Startet neu...';
-      await waitForUpdateRestartThenReload();
-      return;
-    }
-    msgEl.textContent = result.message;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-});
-
-document.getElementById('toggle-add-source').addEventListener('click', () => {
-  const form = document.getElementById('add-source-form');
-  form.hidden = !form.hidden;
-});
-
-document.getElementById('toggle-add-price').addEventListener('click', () => {
-  const form = document.getElementById('add-price-form');
-  form.hidden = !form.hidden;
-});
-
-document.getElementById('sources-body').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button');
+// Delegated on .modal-body (never itself replaced, unlike its htmx-swapped
+// panel children) -- one listener survives every fragment re-render,
+// instead of each panel needing to rebind its own "+" toggle after load.
+document.querySelector('.modal-body').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-toggle-form]');
   if (!btn) return;
-  const id = btn.dataset.id;
-  if (btn.dataset.action === 'fetch') {
-    btn.disabled = true;
-    try {
-      await api(`/api/sources/${id}/fetch-now`, { method: 'POST' });
-    } catch (err) {
-      alert('Abruf fehlgeschlagen: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      loadSources();
-    }
-  } else if (btn.dataset.action === 'delete') {
-    if (!confirm('Quelle wirklich löschen?')) return;
-    await api(`/api/sources/${id}`, { method: 'DELETE' });
-    loadSources();
-  }
+  const form = document.getElementById(btn.dataset.toggleForm);
+  if (form) form.hidden = !form.hidden;
 });
 
-document.getElementById('add-source-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const name = document.getElementById('new-name').value;
-  const base_url = document.getElementById('new-base-url').value;
-  const errEl = document.getElementById('add-source-error');
-  errEl.textContent = '';
-  try {
-    await api('/api/sources', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, base_url }),
-    });
-    ev.target.reset();
-    ev.target.hidden = true;
-    loadSources();
-  } catch (err) {
-    errEl.textContent = err.message;
+// Update panel's restart-poll (see hx/update/panel.html's "restarting"
+// state): htmx keeps retrying /hx/update/ping on its own every 2s, this
+// just gives up with a fallback message after ~30 failed attempts rather
+// than polling silently forever if the restart genuinely never completes.
+function handleUpdatePingFailure(ev) {
+  const el = ev.target;
+  if (!el.hasAttribute || !el.hasAttribute('data-update-ping')) return;
+  const attempts = parseInt(el.dataset.attempts || '0', 10) + 1;
+  if (attempts >= 30) {
+    el.remove();
+    document.getElementById('update-msg').textContent = 'Startet noch... bitte in Kürze manuell neu laden.';
+  } else {
+    el.dataset.attempts = attempts;
   }
-});
-
-document.getElementById('backfill-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const sourceId = document.getElementById('backfill-source').value;
-  const from_month = document.getElementById('backfill-from').value.replace('-', '');
-  const to_month = document.getElementById('backfill-to').value.replace('-', '');
-  const resultEl = document.getElementById('backfill-result');
-  resultEl.textContent = 'Abruf läuft …';
-  try {
-    const result = await api(`/api/sources/${sourceId}/backfill`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_month, to_month }),
-    });
-    resultEl.textContent = `Fertig: ${result.sessions_upserted} Ladevorgänge verarbeitet.`;
-    loadSources();
-  } catch (err) {
-    resultEl.textContent = 'Fehler: ' + err.message;
-  }
-});
-
-document.getElementById('vehicles-body').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button');
-  if (!btn || btn.dataset.action !== 'save-vehicle') return;
-  const name = btn.dataset.vehicle;
-  const input = document.querySelector(`input[data-vehicle-plate="${CSS.escape(name)}"]`);
-  btn.disabled = true;
-  try {
-    await api(`/api/vehicles/${encodeURIComponent(name)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ license_plate: input.value.trim() || null }),
-    });
-  } catch (err) {
-    alert('Speichern fehlgeschlagen: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-document.getElementById('prices-body').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('button');
-  if (!btn || btn.dataset.action !== 'delete-price') return;
-  if (!confirm('Preis wirklich löschen?')) return;
-  await api(`/api/prices/${btn.dataset.id}`, { method: 'DELETE' });
-  loadPrices();
-});
-
-document.getElementById('add-price-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const provider = document.getElementById('new-provider').value;
-  const price_per_kwh = parseFloat(document.getElementById('new-price-per-kwh').value);
-  const sourceVal = document.getElementById('new-price-source').value;
-  const vehicle_name = document.getElementById('new-price-vehicle').value || null;
-  const valid_from = document.getElementById('new-price-valid-from').value;
-  const valid_to = document.getElementById('new-price-valid-to').value || null;
-  const notes = document.getElementById('new-price-notes').value || null;
-  const errEl = document.getElementById('add-price-error');
-  errEl.textContent = '';
-  try {
-    await api('/api/prices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider, price_per_kwh, vehicle_name, valid_from, valid_to, notes,
-        source_id: sourceVal ? parseInt(sourceVal, 10) : null,
-      }),
-    });
-    ev.target.reset();
-    ev.target.hidden = true;
-    loadPrices();
-  } catch (err) {
-    errEl.textContent = err.message;
-  }
-});
-
-document.getElementById('report-settings-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const default_columns = Array.from(
-    document.querySelectorAll('#report-columns-grid input[type=checkbox]:checked')
-  ).map((el) => el.dataset.column);
-  const cost_basis = document.getElementById('cost-basis').value;
-  const orientation = document.getElementById('orientation').value;
-  const show_signature_line = document.getElementById('show-signature-line').checked;
-  const resultEl = document.getElementById('report-settings-result');
-  resultEl.textContent = '';
-  try {
-    await api('/api/report-settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ default_columns, cost_basis, orientation, show_signature_line }),
-    });
-    resultEl.textContent = 'Gespeichert.';
-  } catch (err) {
-    resultEl.textContent = 'Fehler: ' + err.message;
-  }
-});
-
-document.getElementById('pv-bat-price-form').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const pv_price_per_kwh = parseFloat(document.getElementById('pv-price-per-kwh').value) || 0;
-  const bat_price_per_kwh = parseFloat(document.getElementById('bat-price-per-kwh').value) || 0;
-  const resultEl = document.getElementById('pv-bat-price-result');
-  resultEl.textContent = '';
-  try {
-    await api('/api/report-settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pv_price_per_kwh, bat_price_per_kwh }),
-    });
-    resultEl.textContent = 'Gespeichert.';
-  } catch (err) {
-    resultEl.textContent = 'Fehler: ' + err.message;
-  }
-});
+}
+document.body.addEventListener('htmx:sendError', handleUpdatePingFailure);
+document.body.addEventListener('htmx:responseError', handleUpdatePingFailure);
 
 const settingsModal = document.getElementById('settings-modal');
-let settingsLoaded = false;
 
 document.getElementById('settings-close').addEventListener('click', () => settingsModal.close());
 
 document.querySelectorAll('[data-open-settings]').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    if (!settingsLoaded) {
-      settingsLoaded = true;
-      await loadSources();
-      await loadAppSettings();
-      await loadPrices();
-      await loadVehicles();
-      await loadReportSettings();
-      await loadUpdateInfo();
-    }
+  btn.addEventListener('click', () => {
     settingsModal.showModal();
+    document.body.dispatchEvent(new Event('modal-opened'));
   });
 });
 

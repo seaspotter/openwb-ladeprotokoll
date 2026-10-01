@@ -1,0 +1,12 @@
+{% if state == "restarting" %}
+<div hx-get="/hx/update/ping" hx-trigger="load delay:1s, every 2s" hx-target="this" hx-swap="outerHTML"
+     data-update-ping data-attempts="0"></div>
+{% else %}
+<span class="muted" style="font-family: monospace;">{{ current_commit or "–" }}</span>
+{% if available %}
+<button type="button" hx-post="/hx/update/check" hx-target="#update-msg" hx-swap="innerHTML">Nach Updates suchen</button>
+<button type="button" hx-post="/hx/update/run" hx-target="#update-panel" hx-swap="innerHTML"
+        hx-confirm="Neueste Version laden und die Anwendung jetzt neu starten?">Update</button>
+{% endif %}
+{% endif %}
+{% if msg is not none %}<p class="muted" id="update-msg" hx-swap-oob="true">{{ msg }}</p>{% endif %}

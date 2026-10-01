@@ -1,0 +1,22 @@
+<h3>Fahrzeuge</h3>
+<p class="hint">Kennzeichen je Fahrzeug -- wird im PDF-Bericht bei "Fahrzeug(e)" mit ausgegeben. openWB selbst liefert kein Kennzeichen, das ist rein hier gepflegte Zusatzangabe.</p>
+<table id="vehicles-table">
+  <thead>
+    <tr><th>Fahrzeug</th><th>Kennzeichen</th></tr>
+  </thead>
+  <tbody>
+    {% for v in vehicles %}
+    <tr>
+      <td>{{ v.vehicle_name }}</td>
+      <td>
+        <form class="inline" hx-put="/hx/vehicles/{{ v.vehicle_name | urlencode }}" hx-target="#vehicles-panel" hx-swap="innerHTML">
+          <input type="text" name="license_plate" value="{{ v.license_plate or '' }}" placeholder="z.B. AB-CD 123">
+          <button type="submit">Speichern</button>
+          {% if saved == v.vehicle_name %}<span class="muted">Gespeichert.</span>{% endif %}
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if not vehicles %}<p class="muted">Noch keine Fahrzeuge bekannt -- dafür muss zuerst mindestens ein Ladevorgang abgerufen worden sein.</p>{% endif %}
