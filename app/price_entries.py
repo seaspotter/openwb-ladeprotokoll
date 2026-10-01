@@ -1,24 +1,8 @@
 """Electricity price correction: match a price entry to a session and
-compute the corrected cost from a session's actual energy mix, not one
-flat rate over its total kWh.
+compute the corrected cost from its actual energy mix, not one flat rate.
 
-Pure module -- no DB, no HTTP. web.py loads `price_entries` rows and hands
-them here; report_build.py does the same for report generation, with a
-per-row override replacing the auto-match when the user picks one in the
-review UI.
-
-A price entry is scoped per source (optional) and per vehicle name
-(optional) -- both nullable as wildcards, covering a single-car setup
-(everything wildcarded) and a fleet with different tariffs per person or
-site (source and/or vehicle pinned). It only ever prices a session's
-grid-sourced share, though -- see `corrected_cost` below for why the
-PV-/battery-sourced share needs its own two rates.
-
-Corrected cost always uses `energy_kwh` (the session's own per-row
-"Energie" figure -- see chargelog_parse.py), never
-`energy_since_plugged_kwh` (cumulative since plug-in): summing or pricing
-the cumulative figure across a multi-segment session would overstate cost
-the same way it would overstate energy.
+Pure module -- no DB, no HTTP. web.py and report_build.py both call in
+here with a session's own data plus a matched (or user-overridden) entry.
 """
 from __future__ import annotations
 
@@ -44,6 +28,17 @@ class PriceEntry(TypedDict):
 
 
 @dataclass
+class CostBreakdown:
+    grid: float
+    pv: float
+    bat: float
+
+    @property
+    def total(self) -> float:
+        return self.grid + self.pv + self.bat
+
+
+@dataclass
 class PriceDecision:
     price_entry: PriceEntry | None
     cost_openwb: float | None
@@ -51,13 +46,11 @@ class PriceDecision:
     cost_used: float | None
     delta: float | None
     delta_flagged: bool
+    cost_breakdown: CostBreakdown | None = None
 
 
 def _specificity(entry: PriceEntry) -> int:
-    """Ranks a match: source+vehicle (3) > source-only (2) > vehicle-only
-    (1) > wildcard (0). A pinned source or vehicle is worth one point each,
-    so both pinned always outranks either alone, and either alone always
-    outranks neither."""
+    """source+vehicle (3) > source-only (2) > vehicle-only (1) > wildcard (0)."""
     return (2 if entry["source_id"] is not None else 0) + (
         1 if entry["vehicle_name"] is not None else 0
     )
@@ -72,9 +65,7 @@ def _matches(
         return False
     if entry["valid_from"] > session_date:
         return False
-    if entry["valid_to"] is not None and entry["valid_to"] < session_date:
-        return False
-    return True
+    return not (entry["valid_to"] is not None and entry["valid_to"] < session_date)
 
 
 def match_price_entry(
@@ -84,10 +75,8 @@ def match_price_entry(
     vehicle_name: str | None,
     session_date: date,
 ) -> PriceEntry | None:
-    """Picks the single best-matching entry for a session, or None if
-    nothing applies -- the caller (decide_price, or the review UI showing
-    a per-row override dropdown) is responsible for the "kein Preis
-    hinterlegt" fallback to openWB's own cost."""
+    """Best-matching entry for a session, or None -- the caller handles the
+    "kein Preis hinterlegt" fallback to openWB's own cost."""
     candidates = [
         e
         for e in entries
@@ -96,17 +85,6 @@ def match_price_entry(
     if not candidates:
         return None
     return max(candidates, key=lambda e: (_specificity(e), e["created_at"]))
-
-
-@dataclass
-class CostBreakdown:
-    grid: float
-    pv: float
-    bat: float
-
-    @property
-    def total(self) -> float:
-        return self.grid + self.pv + self.bat
 
 
 def corrected_cost_breakdown(
@@ -120,27 +98,17 @@ def corrected_cost_breakdown(
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
 ) -> CostBreakdown | None:
-    """Prices a session's actual energy mix rather than one flat rate over
-    the whole session: the grid-sourced share uses `price_per_kwh` (the
-    matched/overridden price_entries row's own rate -- a utility tariff
-    only ever applies to energy actually drawn from the grid), the
-    PV-sourced share uses `pv_price_per_kwh`, and the battery-sourced share
-    uses `bat_price_per_kwh` -- both global rates from report_settings,
-    since self-produced/stored energy isn't covered by any grid tariff and
-    doesn't vary by source/vehicle/date the way price_entries does. The
-    chargepoint's own share (power_source.cp -- rare, effectively always 0
-    in every real record seen so far, see chargelog_parse.py) is folded
-    into the battery bucket: it represents energy from local storage
-    rather than the grid, same as power_source.bat. Returns the three
-    components separately (statistics.py's per-source Kosten chart wants
-    them individually, not just the sum `corrected_cost` returns).
+    """Prices a session's actual grid/PV/battery energy mix instead of one
+    flat rate over the total: `price_per_kwh` (the matched price_entries
+    rate) only ever prices the grid share; PV/battery each get their own
+    global rate from report_settings, since self-produced energy isn't
+    covered by a grid tariff. Chargepoint share (power_source.cp, rare) is
+    folded into the battery bucket -- it's local storage, not a grid draw.
 
-    When every power_source_*_pct is None (a session predating this
-    feature, or a data source that never populates the split), the whole
-    session is treated as 100% grid -- the same flat-rate behavior this
-    function had before the split existed, and the safest assumption when
-    the actual mix is unknown (it doesn't invent a PV/battery discount
-    that may not have applied)."""
+    power_source_*_pct all None (older session, or a source that never
+    populates the split) defaults to 100% grid, the same flat-rate result
+    this had before the split existed -- never invents a PV/battery
+    discount that may not have applied."""
     if energy_kwh is None:
         return None
     grid_pct = power_source_grid_pct if power_source_grid_pct is not None else 100.0
@@ -164,8 +132,7 @@ def corrected_cost(
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
 ) -> float | None:
-    """The single-figure sum of `corrected_cost_breakdown` -- see that
-    function for the actual per-source pricing logic."""
+    """`corrected_cost_breakdown`'s total -- see that function for the logic."""
     breakdown = corrected_cost_breakdown(
         energy_kwh=energy_kwh,
         price_per_kwh=price_per_kwh,
@@ -191,16 +158,14 @@ def decide_price(
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
 ) -> PriceDecision:
-    """Combines an (already matched or user-overridden) price entry with a
-    session's own energy/cost figures into the decision the review UI and
-    report_build.py need: the corrected cost (or None if no entry
-    applies -- the grid rate is still needed even for a mixed session, so
-    no entry means no correction at all, same as before this function
-    started splitting by source), which cost to actually use on the report
-    (corrected, falling back to openWB's own when there's no entry), and
-    whether the two diverge enough to flag."""
-    cost_corrected = (
-        corrected_cost(
+    """A matched (or overridden) entry + a session's own energy/cost -> the
+    corrected cost (None if no entry applies), which cost to actually use
+    (falls back to openWB's own), and whether the two diverge enough to
+    flag. `cost_breakdown` is computed once here and reused by callers that
+    need the per-source split (e.g. statistics.py's Kosten chart), instead
+    of recomputing it."""
+    cost_breakdown = (
+        corrected_cost_breakdown(
             energy_kwh=energy_kwh,
             price_per_kwh=price_entry["price_per_kwh"],
             power_source_grid_pct=power_source_grid_pct,
@@ -212,6 +177,7 @@ def decide_price(
         )
         if price_entry else None
     )
+    cost_corrected = cost_breakdown.total if cost_breakdown is not None else None
     cost_used = cost_corrected if cost_corrected is not None else cost_openwb
     delta = (
         cost_corrected - cost_openwb
@@ -226,6 +192,7 @@ def decide_price(
         cost_used=cost_used,
         delta=delta,
         delta_flagged=delta_flagged,
+        cost_breakdown=cost_breakdown,
     )
 
 
@@ -244,8 +211,7 @@ def match_and_decide(
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
 ) -> PriceDecision:
-    """Convenience wrapper for the common (no manual override) case: match,
-    then decide."""
+    """Match, then decide -- the common no-override case."""
     entry = match_price_entry(
         entries, source_id=source_id, vehicle_name=vehicle_name, session_date=session_date
     )

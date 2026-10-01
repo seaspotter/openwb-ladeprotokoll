@@ -297,9 +297,9 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   everywhere and visibly changed every "Kosten (korrigiert)" figure in
   the app the moment PV-/Batterie-Preis were set, which the user had not
   wanted. When `split_pv_bat=True`, each session dict also gets
-  `cost_corrected_grid`/`cost_corrected_pv`/`cost_corrected_bat` (via
-  `price_entries.corrected_cost_breakdown`, `0.0` when no price entry
-  matched) for `statistics.py`'s per-source Kosten chart — these three
+  `cost_corrected_grid`/`cost_corrected_pv`/`cost_corrected_bat` (read off
+  `decision.cost_breakdown`, `0.0` when no price entry matched) for
+  `statistics.py`'s per-source Kosten chart — these three
   fields are only ever present under `split_pv_bat=True`, so nothing
   else should read them. Plain
   parameterized SQL via asyncpg, no ORM. asyncpg returns `NUMERIC` columns

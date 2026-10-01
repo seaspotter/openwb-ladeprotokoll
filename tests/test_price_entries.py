@@ -236,6 +236,24 @@ def test_decide_price_uses_pv_bat_rates_for_mixed_session():
     assert decision.cost_used == pytest.approx(2.0)
 
 
+def test_decide_price_exposes_cost_breakdown():
+    entry = _entry(1, price_per_kwh=0.30)
+    decision = decide_price(
+        energy_kwh=10.0, cost_openwb=4.0, price_entry=entry,
+        power_source_grid_pct=50, power_source_pv_pct=50,
+        pv_price_per_kwh=0.10, bat_price_per_kwh=0.15,
+    )
+    assert decision.cost_breakdown.grid == pytest.approx(1.5)
+    assert decision.cost_breakdown.pv == pytest.approx(0.5)
+    assert decision.cost_breakdown.bat == pytest.approx(0.0)
+    assert decision.cost_breakdown.total == pytest.approx(decision.cost_corrected)
+
+
+def test_decide_price_no_entry_has_no_cost_breakdown():
+    decision = decide_price(energy_kwh=10.0, cost_openwb=4.0, price_entry=None)
+    assert decision.cost_breakdown is None
+
+
 def test_match_and_decide_passes_through_pv_bat_rates():
     entry = _entry(1, price_per_kwh=0.30)
     decision = match_and_decide(

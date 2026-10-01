@@ -20,12 +20,7 @@ from .app_settings import update_settings as update_app_settings
 from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
-from .price_entries import (
-    PriceEntry,
-    corrected_cost_breakdown,
-    decide_price,
-    match_and_decide,
-)
+from .price_entries import PriceEntry, decide_price, match_and_decide
 from .report_build import COLUMN_LABELS, ReportBuildError
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
@@ -307,16 +302,10 @@ async def _query_sessions(
     to: date | None = None,
     split_pv_bat: bool = False,
 ) -> list[dict]:
-    """Shared by the /api/sessions HTTP route (Übersicht, Bericht-review,
-    and the MCP search_sessions tool) and /api/statistics -- same filters,
-    same base price-decision enrichment. `split_pv_bat` is off by default,
-    keeping cost_corrected the plain price_entries-rate-times-energy_kwh
-    figure everywhere it has always been (Übersicht, Bericht erstellen,
-    generated reports/PDFs, MCP) -- only /api/statistics passes True, so
-    the PV-/battery-source split (report_settings.pv_price_per_kwh/
-    bat_price_per_kwh) affects *only* the /statistik page's aggregates,
-    per explicit user feedback after an earlier version applied it
-    app-wide and changed "Kosten (korrigiert)" everywhere unexpectedly."""
+    """Shared by GET /api/sessions, MCP's search_sessions, and
+    /api/statistics. `split_pv_bat` must stay False for everything except
+    /api/statistics -- it changes what cost_corrected means, and widening
+    it elsewhere changed "Kosten (korrigiert)" app-wide unexpectedly once."""
     clauses = []
     params: list = []
 
@@ -379,12 +368,7 @@ async def _query_sessions(
                 energy_kwh=energy_kwh,
                 cost_openwb=cost_openwb,
             )
-        # asyncpg returns NUMERIC as Decimal -- these fields go out as
-        # plain JSON numbers over HTTP either way, but statistics.py's
-        # aggregate() does real float arithmetic on them (energy_kwh *
-        # power_source_pv_pct), which raises TypeError against a Decimal.
-        # Converting once here, not per-consumer, keeps every field in
-        # this dict a plain float/None consistently.
+        # Decimal (asyncpg's NUMERIC type) breaks statistics.py's float math.
         d["energy_kwh"] = energy_kwh
         d["cost_openwb"] = cost_openwb
         for pct_key in (
@@ -399,18 +383,7 @@ async def _query_sessions(
         d["cost_delta"] = decision.delta
         d["cost_delta_flagged"] = decision.delta_flagged
         if split_pv_bat:
-            breakdown = (
-                corrected_cost_breakdown(
-                    energy_kwh=energy_kwh,
-                    price_per_kwh=decision.price_entry["price_per_kwh"],
-                    power_source_grid_pct=d["power_source_grid_pct"],
-                    power_source_pv_pct=d["power_source_pv_pct"],
-                    power_source_bat_pct=d["power_source_bat_pct"],
-                    power_source_cp_pct=d["power_source_cp_pct"],
-                    **split_kwargs,
-                )
-                if decision.price_entry is not None else None
-            )
+            breakdown = decision.cost_breakdown
             d["cost_corrected_grid"] = breakdown.grid if breakdown else 0.0
             d["cost_corrected_pv"] = breakdown.pv if breakdown else 0.0
             d["cost_corrected_bat"] = breakdown.bat if breakdown else 0.0
@@ -470,16 +443,8 @@ async def api_statistics(
     source_id: int | None = None,
     vehicle: str | None = None,
 ):
-    """Per-month/year aggregates plus a per-vehicle breakdown (energy,
-    cost, grid/PV/battery/chargepoint kWh split) for the /statistik
-    page's charts. Reuses _query_sessions for the actual data, but with
-    split_pv_bat=True -- this is the *only* place cost_corrected reflects
-    report_settings' pv_price_per_kwh/bat_price_per_kwh split (see
-    _query_sessions' docstring); Übersicht/Bericht-review/reports all get
-    the plain price_entries-rate figure via the same function's default.
-    report_settings' cost_basis decides which cost figure to sum -- one
-    "Kosten" total, same simplification as report_build.py, not
-    openWB/corrected side by side."""
+    """Per-month/year + per-vehicle aggregates for /statistik. split_pv_bat=
+    True here only (see _query_sessions)."""
     pool = get_pool()
     settings = await get_report_settings(pool)
     sessions = await _query_sessions(
@@ -547,12 +512,8 @@ def _jsonable(value):
 
 
 def _resolve_price_decision(row, entries_list, entries_by_id, override):
-    """Plain, flat-rate price decision (price_entries rate x total
-    energy_kwh) -- deliberately does NOT apply the PV-/battery-source
-    split from _query_sessions' split_pv_bat=True path. Reports and their
-    PDFs must stay reproducible/consistent with what a user saw in
-    Bericht-review at generation time, and that review view itself is
-    Übersicht-like (plain price_entries figures), not statistics-like."""
+    """Plain flat-rate decision -- never the Statistik PV/battery split;
+    reports must match what Bericht-review showed at generation time."""
     energy_kwh = _to_float(row["energy_kwh"])
     cost_openwb = _to_float(row["cost_openwb"])
     if override == "openwb":
@@ -619,11 +580,8 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
     return sessions, ordered_rows
 
 
-# German label for report_build.COST_BASES, shown as a "Kostenbasis"
-# column in "Bisherige Berichte" (report_review.html) -- the PDF itself
-# deliberately does not display which basis it used (explicit user
-# feedback: this is a review-time detail, not something the document
-# needs to spell out).
+# German label for report_build.COST_BASES, shown in "Bisherige Berichte"
+# only -- not in the PDF itself (deliberate, see CLAUDE.md).
 _COST_BASIS_LABELS = {"openwb": "openWB-Wert", "corrected": "Korrigiert"}
 
 
@@ -728,17 +686,10 @@ async def _generate_report(
     pool, title: str, session_ids: list[int], columns: list[str] | None, price_overrides: dict,
     cost_basis: str | None = None,
 ) -> dict:
-    """Builds and persists an immutable report -- shared by the
-    POST /api/reports HTTP route and the MCP generate_report tool
-    (mcp_server.py). Reports are immutable once created -- "regenerate"
-    always inserts a new row rather than updating an existing one. Insert
-    happens in two steps because the PDF's own header/footer displays the
-    report's id, which only exists once the row is inserted. `cost_basis`
-    overrides report_settings' own default for this one report (None uses
-    the configured default) -- recorded on the row itself so "Bisherige
-    Berichte" can show which basis a given report actually used. Raises
-    ReportBuildError (caller decides how to surface it: HTTPException for
-    the HTTP route, a plain exception for the MCP tool)."""
+    """Builds and persists an immutable report; shared by the HTTP route
+    and the MCP generate_report tool. Insert-then-render-then-update
+    because the PDF needs the row's id first. `cost_basis=None` uses
+    report_settings' default. Raises ReportBuildError on failure."""
     settings = await get_report_settings(pool)
     resolved_cost_basis = cost_basis or settings["cost_basis"]
     sessions, rows = await _load_report_sessions(pool, session_ids, price_overrides)
@@ -746,39 +697,38 @@ async def _generate_report(
         sessions, columns or settings["default_columns"], resolved_cost_basis
     )
 
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            report_row = await conn.fetchrow(
-                "INSERT INTO reports (title, column_selection, total_duration_seconds, "
-                "total_energy_kwh, total_energy_discharged_kwh, total_range_charged_km, "
-                "total_cost_openwb, total_cost_corrected, cost_basis, pdf_data) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at",
-                title, data.columns, data.totals.duration_seconds,
-                data.totals.energy_kwh, data.totals.energy_discharged_kwh,
-                data.totals.range_charged_km, data.totals.cost_openwb,
-                data.totals.cost_corrected, resolved_cost_basis, b"",
-            )
-            report_id = report_row["id"]
+    async with pool.acquire() as conn, conn.transaction():
+        report_row = await conn.fetchrow(
+            "INSERT INTO reports (title, column_selection, total_duration_seconds, "
+            "total_energy_kwh, total_energy_discharged_kwh, total_range_charged_km, "
+            "total_cost_openwb, total_cost_corrected, cost_basis, pdf_data) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at",
+            title, data.columns, data.totals.duration_seconds,
+            data.totals.energy_kwh, data.totals.energy_discharged_kwh,
+            data.totals.range_charged_km, data.totals.cost_openwb,
+            data.totals.cost_corrected, resolved_cost_basis, b"",
+        )
+        report_id = report_row["id"]
 
-            meta = await _report_meta(
-                pool, str(report_id), title, report_row["created_at"], rows, settings
-            )
-            pdf_bytes = render_pdf(data, meta)
+        meta = await _report_meta(
+            pool, str(report_id), title, report_row["created_at"], rows, settings
+        )
+        pdf_bytes = render_pdf(data, meta)
+        await conn.execute(
+            "UPDATE reports SET pdf_data = $2 WHERE id = $1", report_id, pdf_bytes
+        )
+
+        for s, r in zip(sessions, rows):
+            snapshot = _jsonable({k: v for k, v in s.items() if k != "price_entry"})
+            price_entry = s.get("price_entry")
             await conn.execute(
-                "UPDATE reports SET pdf_data = $2 WHERE id = $1", report_id, pdf_bytes
+                "INSERT INTO report_sessions (report_id, session_id, snapshot, "
+                "price_entry_snapshot, cost_openwb, cost_corrected, cost_used) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                report_id, r["id"], snapshot,
+                _jsonable(price_entry) if price_entry else None,
+                s.get("cost_openwb"), s.get("cost_corrected"), s.get("cost_used"),
             )
-
-            for s, r in zip(sessions, rows):
-                snapshot = _jsonable({k: v for k, v in s.items() if k != "price_entry"})
-                price_entry = s.get("price_entry")
-                await conn.execute(
-                    "INSERT INTO report_sessions (report_id, session_id, snapshot, "
-                    "price_entry_snapshot, cost_openwb, cost_corrected, cost_used) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                    report_id, r["id"], snapshot,
-                    _jsonable(price_entry) if price_entry else None,
-                    s.get("cost_openwb"), s.get("cost_corrected"), s.get("cost_used"),
-                )
 
     row = await pool.fetchrow(f"{_REPORT_SUMMARY_SELECT} WHERE r.id = $1", report_id)
     return _report_summary_row(row)
