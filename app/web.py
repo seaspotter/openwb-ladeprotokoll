@@ -21,7 +21,7 @@ from .db import get_pool
 from .fetch_service import current_month, fetch_service, month_range
 from .pdf_render import ReportMeta, render_html, render_pdf
 from .price_entries import PriceEntry, decide_price, match_and_decide
-from .report_build import COLUMN_LABELS, ReportBuildError, _fmt_cost, _fmt_number
+from .report_build import COLUMN_LABELS, ReportBuildError, _fmt_cost, _fmt_duration, _fmt_number
 from .report_build import build as build_report_data
 from .report_settings import ReportSettingsError
 from .report_settings import get_settings as get_report_settings
@@ -519,19 +519,18 @@ async def hx_backfill_run(request: Request):
     return response
 
 
-async def _query_sessions(
+async def _fetch_session_rows(
     pool,
     source_id: int | None = None,
     vehicle: str | None = None,
     chargepoint: str | None = None,
     from_: date | None = None,
     to: date | None = None,
-    split_pv_bat: bool = False,
-) -> list[dict]:
-    """Shared by GET /api/sessions, MCP's search_sessions, and
-    /api/statistics. `split_pv_bat` must stay False for everything except
-    /api/statistics -- it changes what cost_corrected means, and widening
-    it elsewhere changed "Kosten (korrigiert)" app-wide unexpectedly once."""
+):
+    """Raw asyncpg rows for the same source/vehicle/chargepoint/date
+    filter _query_sessions applies, for callers (the report-review table)
+    that need the unconverted row to resolve a price decision themselves
+    rather than _query_sessions' own already-dict-ified output."""
     clauses = []
     params: list = []
 
@@ -550,10 +549,23 @@ async def _query_sessions(
     if to:
         add("time_begin::date <= ${}", to)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    return await pool.fetch(f"SELECT * FROM sessions {where} ORDER BY time_begin DESC", *params)
 
-    rows = await pool.fetch(
-        f"SELECT * FROM sessions {where} ORDER BY time_begin DESC", *params
-    )
+
+async def _query_sessions(
+    pool,
+    source_id: int | None = None,
+    vehicle: str | None = None,
+    chargepoint: str | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+    split_pv_bat: bool = False,
+) -> list[dict]:
+    """Shared by GET /api/sessions, MCP's search_sessions, and
+    /api/statistics. `split_pv_bat` must stay False for everything except
+    /api/statistics -- it changes what cost_corrected means, and widening
+    it elsewhere changed "Kosten (korrigiert)" app-wide unexpectedly once."""
+    rows = await _fetch_session_rows(pool, source_id, vehicle, chargepoint, from_, to)
     # Loaded once per request, not per session -- price_entries is a small
     # table (a handful of rows per fleet/tariff), so this stays cheap even
     # for a large session list.
@@ -950,6 +962,139 @@ async def _load_report_sessions(pool, session_ids: list[int], price_overrides: d
 _COST_BASIS_LABELS = {"openwb": "openWB-Wert", "corrected": "Korrigiert"}
 
 
+def _parse_review_selection(form) -> tuple[list[int], dict]:
+    """Report-review's session table posts its full state as `all_ids`
+    (every currently-loaded session, so unchecked ones aren't silently
+    lost -- a checkbox absent from form data just means unchecked) plus
+    per-row `selected_<id>`/`override_<id>` fields. Returns (checked ids
+    in table order, {id: override}), override one of "auto"/"openwb"/a
+    price_entry id string."""
+    all_ids = [int(v) for v in form.getlist("all_ids")]
+    checked_ids = [sid for sid in all_ids if f"selected_{sid}" in form]
+    overrides = {sid: form.get(f"override_{sid}", "auto") for sid in all_ids}
+    return checked_ids, overrides
+
+
+async def _review_rows_response(
+    request: Request, pool, *,
+    source_id: str | None, vehicle: str | None, chargepoint: str | None,
+    from_: str | None, to: str | None,
+    checked_ids: list[int] | None = None, overrides: dict | None = None,
+):
+    """Renders the report-review session table + totals-grid + session
+    count together (one fragment, three hx-swap-oob targets besides the
+    primary tbody) -- an override changes that row's own displayed
+    "Kosten (korrigiert)", not just the totals, so both re-render on every
+    change regardless of which one actually triggered it.
+
+    `checked_ids=None` means "everything checked" (a fresh filter load);
+    `overrides=None` means every row defaults to "auto". Both are given
+    explicitly when re-rendering after a checkbox/override change."""
+    rows = await _fetch_session_rows(
+        pool,
+        int(source_id) if source_id else None,
+        vehicle or None,
+        chargepoint or None,
+        date.fromisoformat(from_) if from_ else None,
+        date.fromisoformat(to) if to else None,
+    )
+    price_rows = await pool.fetch("SELECT * FROM price_entries")
+    entries_list = [_price_entry_for_matching(r) for r in price_rows]
+    entries_by_id = {e["id"]: e for e in entries_list}
+
+    display_rows = []
+    totals = {
+        "count": 0, "duration": 0, "energy": 0.0, "discharged": 0.0,
+        "range": 0.0, "cost_openwb": 0.0, "cost_used": 0.0,
+    }
+    for r in rows:
+        override = (overrides or {}).get(r["id"], "auto")
+        decision = _resolve_price_decision(
+            r, entries_list, entries_by_id, None if override == "auto" else override,
+        )
+        # Independent of the active override -- the "Automatisch (...)"
+        # option always names what auto-match would actually use.
+        auto_decision = match_and_decide(
+            entries_list, source_id=r["source_id"], vehicle_name=r["vehicle_name"],
+            session_date=r["time_begin"].date(),
+            energy_kwh=_to_float(r["energy_kwh"]), cost_openwb=_to_float(r["cost_openwb"]),
+        )
+        checked = True if checked_ids is None else (r["id"] in checked_ids)
+        flagged = override == "auto" and decision.delta_flagged
+        display_rows.append({
+            "id": r["id"],
+            "checked": checked,
+            "override": override,
+            "time_begin_display": _fmt_dt_de(r["time_begin"]),
+            "vehicle_name": r["vehicle_name"],
+            "chargepoint_name": r["chargepoint_name"],
+            "energy_display": _fmt_number(_to_float(r["energy_kwh"]), 2, " kWh"),
+            "cost_openwb_display": _fmt_cost(decision.cost_openwb),
+            "cost_used_display": _fmt_cost(decision.cost_used),
+            "flagged": flagged,
+            "auto_provider": auto_decision.price_entry["provider"] if auto_decision.price_entry else None,
+        })
+        if checked:
+            totals["count"] += 1
+            totals["duration"] += r["time_charged_seconds"] or 0
+            totals["energy"] += _to_float(r["energy_kwh"]) or 0
+            totals["discharged"] += _to_float(r["energy_discharged_kwh"]) or 0
+            totals["range"] += _to_float(r["range_charged_km"]) or 0
+            totals["cost_openwb"] += decision.cost_openwb or 0
+            totals["cost_used"] += decision.cost_used or 0
+
+    totals_display = {
+        "count": totals["count"],
+        "duration_display": _fmt_duration(totals["duration"]),
+        "energy_display": _fmt_number(totals["energy"], 2, " kWh"),
+        "discharged_display": _fmt_number(totals["discharged"], 2, " kWh"),
+        "range_display": _fmt_number(totals["range"], 0, " km"),
+        "cost_openwb_display": _fmt_cost(totals["cost_openwb"]),
+        "cost_used_display": _fmt_cost(totals["cost_used"]),
+    }
+    return templates.TemplateResponse(
+        "hx/report_review/sessions.html",
+        {
+            "request": request,
+            "sessions": display_rows,
+            "price_entries": entries_list,
+            "totals": totals_display,
+            "total_count": len(rows),
+        },
+    )
+
+
+@router.get("/hx/report-review/sessions", response_class=HTMLResponse)
+async def hx_report_review_sessions(
+    request: Request,
+    source_id: str | None = None, vehicle: str | None = None, chargepoint: str | None = None,
+    from_: str | None = None, to: str | None = None,
+):
+    """Filter changed (or first load) -- always resets every row to
+    checked+auto, same as the old loadSessions() did."""
+    return await _review_rows_response(
+        request, get_pool(),
+        source_id=source_id, vehicle=vehicle, chargepoint=chargepoint, from_=from_, to=to,
+    )
+
+
+@router.post("/hx/report-review/totals", response_class=HTMLResponse)
+async def hx_report_review_totals(request: Request):
+    """A checkbox or override <select> changed -- re-derive the same
+    session set from the (hidden, hx-include'd) filter fields and overlay
+    the posted checked/override state, instead of trusting the client to
+    have kept an accurate in-memory copy."""
+    form = await request.form()
+    checked_ids, overrides = _parse_review_selection(form)
+    return await _review_rows_response(
+        request, get_pool(),
+        source_id=form.get("source_id") or None, vehicle=form.get("vehicle") or None,
+        chargepoint=form.get("chargepoint") or None,
+        from_=form.get("from_") or None, to=form.get("to") or None,
+        checked_ids=checked_ids, overrides=overrides,
+    )
+
+
 async def _report_meta(
     pool, report_id: str, title: str, generated_at: datetime, rows, settings: dict,
 ) -> ReportMeta:
@@ -1150,6 +1295,64 @@ async def api_delete_report(report_id: int):
     if result == "DELETE 0":
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
     return {"ok": True}
+
+
+async def _reports_list_response(
+    request: Request, pool, error: str | None = None, created_report_id: int | None = None,
+):
+    rows = await pool.fetch(f"{_REPORT_SUMMARY_SELECT} ORDER BY r.created_at DESC")
+    reports = []
+    for r in rows:
+        summary = _report_summary_row(r)
+        summary["created_at_display"] = _fmt_dt_de(r["created_at"])
+        summary["total_cost_display"] = _fmt_cost(summary["total_cost"])
+        reports.append(summary)
+    return templates.TemplateResponse(
+        "hx/report_review/reports.html",
+        {
+            "request": request,
+            "reports": reports,
+            "error": error,
+            "created_report_id": created_report_id,
+        },
+    )
+
+
+@router.get("/hx/reports", response_class=HTMLResponse)
+async def hx_reports(request: Request):
+    return await _reports_list_response(request, get_pool())
+
+
+@router.delete("/hx/reports/{report_id}", response_class=HTMLResponse)
+async def hx_delete_report(request: Request, report_id: int):
+    pool = get_pool()
+    await pool.execute("DELETE FROM reports WHERE id = $1", report_id)
+    return await _reports_list_response(request, pool)
+
+
+@router.post("/hx/reports", response_class=HTMLResponse)
+async def hx_create_report(request: Request):
+    pool = get_pool()
+    form = await request.form()
+    checked_ids, overrides = _parse_review_selection(form)
+    if not checked_ids:
+        return await _reports_list_response(request, pool, error="Keine Ladevorgänge ausgewählt")
+    title = form.get("title", "").strip()
+    if not title:
+        return await _reports_list_response(request, pool, error="Bitte einen Titel eingeben")
+    price_overrides: dict = {}
+    for sid in checked_ids:
+        override = overrides.get(sid, "auto")
+        if override == "openwb":
+            price_overrides[sid] = "openwb"
+        elif override != "auto":
+            price_overrides[sid] = int(override)
+    cost_basis = form.get("cost_basis") or None
+    try:
+        report = await _generate_report(pool, title, checked_ids, None, price_overrides, cost_basis)
+    except ReportBuildError as exc:
+        return await _reports_list_response(request, pool, error=str(exc))
+    return await _reports_list_response(request, pool, created_report_id=report["id"])
 
 
 @router.get("/api/update/version")

@@ -562,28 +562,57 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `htmx:responseError` listener, since htmx's own interval trigger has no
   built-in retry limit.
 - `app/templates/report_review.html` — session/price-override selection UI
-  (`/report-review`): filters (source/vehicle/chargepoint/date, same
-  dropdown-not-free-text pattern as `index.html`) load sessions via
-  `/api/sessions`; recomputes totals client-side as the selection changes
-  (mirroring `report_build.py`'s summing logic in JS, since this is just
-  an interactive preview — the server-side build via
-  `/api/reports/preview`/`/api/reports` is the actual source of truth for
-  what a generated report contains); lists/links previously generated
-  reports. Sends no `columns` in its request bodies at all (see
-  `_settings_modal.html` above for why) — `web.py` falls back to
-  `report_settings`'s `default_columns` whenever `columns` is omitted.
-  `cost_basis` is the deliberate exception to that rule: a `<select>`
-  right next to the Titel field (pre-filled from `GET /api/report-settings`
-  on page load, but always sent explicitly, never omitted) lets each
-  report's cost basis be a conscious per-generation choice — see
-  `web.py`'s note on why this one setting is overridable per-report while
-  `columns` isn't. Options are exactly `"openwb"`/`"corrected"` — no
-  third option; a grid-only-pricing variant was tried here and reverted,
-  see `web.py`'s note. "Bisherige Berichte" shows a "Kostenbasis" column
-  and a single "Kosten" column (`r.total_cost` — whichever raw total
-  actually matches that report's own `cost_basis`), not a
-  `total_cost_corrected`-labeled column that would be wrong for an
+  (`/report-review`): filter form (source/vehicle/chargepoint/date, same
+  dropdown-not-free-text pattern as `index.html`) lists/links previously
+  generated reports. Options are exactly `"openwb"`/`"corrected"` for
+  `cost_basis` — no third option; a grid-only-pricing variant was tried
+  here and reverted, see `web.py`'s note. "Bisherige Berichte" shows a
+  "Kostenbasis" column and a single "Kosten" column (`r.total_cost` —
+  whichever raw total actually matches that report's own `cost_basis`),
+  not a `total_cost_corrected`-labeled column that would be wrong for an
   openWB-basis report. Keep new UI copy in German too.
+
+  **htmx (Phase 3), the most involved conversion so far**: the filter form
+  (`hx-get="/hx/report-review/sessions"`, same `load`-trigger pattern as
+  Übersicht) and "Bisherige Berichte" (`GET/DELETE /hx/reports`) convert
+  the same straightforward way. The interesting part is the session
+  table's **live per-row price-override + running totals**, previously
+  client-side JS mirroring `report_build.py`'s own summing logic — now a
+  single `POST /hx/report-review/totals` recomputes *everything* server-
+  side (reusing `_resolve_price_decision`, the exact function report
+  generation itself uses, so the review table and the actual generated
+  report can never disagree) and re-renders both the table rows and the
+  totals-grid in one response (`hx-swap-oob` for `#totals-grid`/
+  `#session-count` alongside the primary `#sessions-body` swap) — an
+  override changes that row's own displayed "Kosten (korrigiert)", not
+  just the sum, so both have to re-render on every change regardless of
+  which one fired it. The `<tbody id="sessions-body">` itself (never
+  replaced, only its content) carries `hx-post`/`hx-trigger="change"`/
+  `hx-include="#filter-form, #sessions-table"` once, in the static page —
+  one delegated binding instead of one `hx-post` per checkbox/`<select>`,
+  same principle as the Settings-panel "+"-toggle fix (Phase 1). Since
+  unchecking a row just **omits** that checkbox from the posted form
+  (standard HTML), every row also carries a hidden `all_ids` field so the
+  server always knows the full candidate set regardless of what's
+  checked (`_parse_review_selection`). The filter fields themselves are
+  *also* re-sent via `hx-include` on every totals recompute — the server
+  re-derives the exact same session set from them rather than trusting a
+  client-held list, so a stale/tampered request can't make the server
+  "forget" the active filter. "Bericht erzeugen" posts the same
+  `all_ids`/`selected_<id>`/`override_<id>` shape (`hx-include=
+  "#sessions-table"` on `#report-form`) to `POST /hx/reports` (form-
+  encoded, unlike the JSON `/api/reports` — manually parsed, matching
+  this project's established `/hx/...` convention, see `_settings_modal
+  .html`'s own note on why), which just calls the same `_generate_report`
+  the JSON route and the MCP tool already share. "Vorschau" deliberately
+  stays untouched plain JS (`currentSelectionPayload()`, now reading the
+  live DOM instead of an in-memory mirror since that mirror is gone) —
+  it renders straight into an `<iframe>` and persists nothing, so there's
+  no htmx fragment to swap into; JSON is still the simplest way to hit
+  `/api/reports/preview`. "Alle"/none (`#select-all`) is the one place
+  with genuine custom JS: flips every row's checkbox, then
+  `htmx.trigger(sessionsBody, 'change')` to fire the one shared recompute
+  request — there's no htmx-native "toggle N other elements" primitive.
 - `app/templates/statistik.html` — monthly/yearly statistics at
   `/statistik`: source/vehicle filter + a granularity `<select>`
   (Monatlich/Jährlich), a totals-grid summary (same `.stat` pattern as

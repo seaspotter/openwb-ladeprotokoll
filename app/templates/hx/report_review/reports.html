@@ -1,0 +1,22 @@
+<table id="reports-table">
+  <thead>
+    <tr><th>Titel</th><th>Erzeugt</th><th class="numeric">Ladevorgänge</th><th>Kostenbasis</th><th class="numeric">Kosten</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for r in reports %}
+    <tr>
+      <td>{{ r.title }}</td>
+      <td>{{ r.created_at_display }}</td>
+      <td class="numeric">{{ r.session_count }}</td>
+      <td>{{ r.cost_basis_label }}</td>
+      <td class="numeric">{{ r.total_cost_display }}</td>
+      <td>
+        <a href="/reports/{{ r.id }}/pdf" target="_blank">PDF</a>
+        &nbsp;<button type="button" class="danger" hx-delete="/hx/reports/{{ r.id }}" hx-target="#reports-panel" hx-swap="innerHTML" hx-confirm="Bericht wirklich löschen?">Löschen</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="muted" id="report-error" hx-swap-oob="true">{{ error or "" }}</p>
+<p class="muted" id="report-result" hx-swap-oob="true">{% if created_report_id %}Bericht erzeugt: <a href="/reports/{{ created_report_id }}/pdf" target="_blank">PDF öffnen</a>{% endif %}</p>

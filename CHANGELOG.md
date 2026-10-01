@@ -23,6 +23,17 @@ what that means in practice for this project.
   request per source. Source names and energy/cost figures are formatted
   server-side now, reusing the same German-locale helpers the PDF report
   already used.
+- Bericht-erstellen (session selection, price overrides, running totals,
+  Bisherige Berichte) converted to htmx too -- the review table's live
+  per-row price-override and totals recompute now happen server-side via
+  `POST /hx/report-review/totals`, reusing the exact same price-decision
+  logic report generation itself uses, so the review table and a
+  generated report can never disagree. Report generation itself now
+  posts the same session-selection shape to a new form-encoded
+  `POST /hx/reports`, sharing `_generate_report` with the existing JSON
+  route and the MCP tool. "Vorschau" (renders straight into an iframe,
+  persists nothing) deliberately stays plain JS/JSON -- there's no
+  fragment to swap into an iframe srcdoc.
 
 ### Fixed
 - `price_entries.decide_price` recomputed its own cost breakdown a

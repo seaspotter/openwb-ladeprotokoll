@@ -1,0 +1,33 @@
+{% for s in sessions %}
+<tr>
+  <td>
+    <input type="hidden" name="all_ids" value="{{ s.id }}">
+    <input type="checkbox" name="selected_{{ s.id }}" {{ "checked" if s.checked }}>
+  </td>
+  <td>{{ s.time_begin_display }}</td>
+  <td>{{ s.vehicle_name or "–" }}</td>
+  <td>{{ s.chargepoint_name or "–" }}</td>
+  <td class="numeric">{{ s.energy_display }}</td>
+  <td class="numeric">{{ s.cost_openwb_display }}</td>
+  <td>
+    <select name="override_{{ s.id }}">
+      <option value="auto" {{ "selected" if s.override == "auto" }}>{{ "Automatisch (" ~ s.auto_provider ~ ")" if s.auto_provider else "Automatisch (kein Preis)" }}</option>
+      <option value="openwb" {{ "selected" if s.override == "openwb" }}>openWB-Wert verwenden</option>
+      {% for p in price_entries %}
+      <option value="{{ p.id }}" {{ "selected" if s.override == p.id|string }}>{{ p.provider }} ({{ "%.4f"|format(p.price_per_kwh) }} €/kWh)</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td class="numeric {{ 'flagged' if s.flagged }}">{{ s.cost_used_display }}</td>
+</tr>
+{% endfor %}
+<span class="session-count" id="session-count" hx-swap-oob="true">{{ total_count }} Ladevorgänge geladen</span>
+<div class="totals-grid" id="totals-grid" hx-swap-oob="true">
+  <div class="stat"><div class="label">Ausgewählt</div><div class="value">{{ totals.count }}</div></div>
+  <div class="stat"><div class="label">Dauer</div><div class="value">{{ totals.duration_display }}</div></div>
+  <div class="stat"><div class="label">Energie</div><div class="value">{{ totals.energy_display }}</div></div>
+  <div class="stat"><div class="label">Entladene Energie</div><div class="value">{{ totals.discharged_display }}</div></div>
+  <div class="stat"><div class="label">Reichweite</div><div class="value">{{ totals.range_display }}</div></div>
+  <div class="stat"><div class="label">Kosten (real)</div><div class="value">{{ totals.cost_openwb_display }}</div></div>
+  <div class="stat"><div class="label">Kosten (korrigiert)</div><div class="value">{{ totals.cost_used_display }}</div></div>
+</div>
