@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
 ### Added
 - Einstellungen dialog converted to htmx (vendored, same pattern as the
   sibling `openwb-logger`/`knxpilot` projects): Quellen, Preise,
