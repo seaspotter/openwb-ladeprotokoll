@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-16
+
 ### Changed
 - Resolved the remaining pip-ecosystem Dependabot PRs: `weasyprint`
   63.1 -> 70.0 (fixes the four WeasyPrint CVEs Dependabot flagged,
