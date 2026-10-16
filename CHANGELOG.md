@@ -6,6 +6,13 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- Dependabot, mirroring the sibling `openwb-logger` project's
+  `.github/dependabot.yml`: weekly update PRs for `requirements.txt`
+  (pip), the GitHub Actions workflows, and the Dockerfile's base image.
+  Also enabled GitHub's vulnerability alerts + Dependabot security
+  updates at the repo level, both previously off.
+
 ## [0.4.0] - 2026-10-01
 
 ### Added
