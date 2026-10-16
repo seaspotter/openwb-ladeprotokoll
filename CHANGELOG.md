@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-16
+
 ### Added
 - Dependabot, mirroring the sibling `openwb-logger` project's
   `.github/dependabot.yml`: weekly update PRs for `requirements.txt`
