@@ -6,6 +6,18 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Fixed
+- Merged a handful of mechanical Dependabot PRs (GitHub Actions versions,
+  the Dockerfile's Python base image) straight to `main` the same way the
+  sibling `openwb-logger` project does. Unlike there, the `python:3.14-slim`
+  bump broke the image build outright -- `mcp==1.29.0` only requires
+  `starlette>=0.48.0` under Python 3.14+, conflicting with
+  `fastapi==0.115.0`'s `starlette<0.39.0` pin (a conflict that's been
+  latent all along, just invisible under 3.12/3.13, unlike `openwb-logger`
+  which is already on much newer `fastapi`/`mcp` pins that don't hit it).
+  Reverted to `python:3.12-slim`; a real mcp/fastapi upgrade would need to
+  land first before trying that bump again.
+
 ## [0.5.0] - 2026-10-16
 
 ### Added
