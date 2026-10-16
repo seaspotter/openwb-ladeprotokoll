@@ -6,6 +6,40 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Changed
+- Resolved the remaining pip-ecosystem Dependabot PRs: `weasyprint`
+  63.1 -> 70.0 (fixes the four WeasyPrint CVEs Dependabot flagged,
+  including a high-severity EPS/Ghostscript RCE and an SSRF-protection
+  bypass), `uvicorn` 0.32.0 -> 0.54.0, `httpx` 0.27.2 -> 0.28.1,
+  `asyncpg` 0.30.0 -> 0.32.0, `cryptography` 50.0.1 -> 50.0.2, and
+  `mcp` 1.29.0 -> 2.3.0 (fixes the medium-severity unbounded-session-
+  accumulation advisory; mcp 2.x's `streamable_http_app()` also now
+  bounds sessions by default, `max_sessions=10000`/
+  `session_idle_timeout=1800s`). `fastapi` deliberately left at
+  0.115.0 -- confirmed via a dry-run dependency resolve that mcp 2.3.0
+  doesn't actually require a newer `starlette` on Python 3.12 (the old
+  "mcp 2.x needs starlette>=0.48" pin comment only applied under Python
+  3.14+), so there was no need to touch it, avoiding the exact
+  `fastapi`/`starlette`-major-version `TemplateResponse` breakage the
+  sibling `openwb-logger` project hit (and had to ship a hotfix release
+  for) after voluntarily bumping `fastapi` alongside its own mcp 2.x
+  upgrade.
+  mcp 2.x renamed `mcp.server.fastmcp.FastMCP` -> `mcp.server.mcpserver
+  .MCPServer` and moved `streamable_http_path`/`transport_security` from
+  the constructor onto `streamable_http_app()` -- migrated
+  `app/mcp_server.py`/`app/main.py` accordingly (`@tool()`/`@resource()`
+  and the `session_manager.run()` lifespan pattern are unchanged).
+  Merging Dependabot's raw PR diff for this one specifically would have
+  broken the app outright at import time (confirmed: `from
+  mcp.server.fastmcp import FastMCP` raises `ImportError` under mcp
+  2.x, since `requirements.txt` is the only file a Dependabot PR
+  touches) -- verified the actual fix with a real MCP client session
+  over streamable HTTP (initialize, list_tools, list_resources,
+  call_tool, read_resource) against a live server, not just `pytest`/
+  import success, plus a real `TestClient` HTTP request through every
+  page/htmx-fragment route -- exactly the level of verification
+  `openwb-logger`'s own postmortem said should have caught its bug.
+
 ### Fixed
 - Merged a handful of mechanical Dependabot PRs (GitHub Actions versions,
   the Dockerfile's Python base image) straight to `main` the same way the

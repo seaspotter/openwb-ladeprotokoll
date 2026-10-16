@@ -475,9 +475,20 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   otherwise the only external-network dependency anywhere in the app
   (every icon is inline SVG); a CDN script would silently stop working on
   a fully offline LAN, which this app is explicitly designed to run on.
-- `app/mcp_server.py` — MCP server (`FastMCP`, Streamable HTTP transport)
-  mounted at `/mcp` on the same FastAPI app/port, identical pattern to
-  `openwb-logger/app/mcp_server.py`. Two tools: `search_sessions` and
+- `app/mcp_server.py` — MCP server (`MCPServer`, Streamable HTTP
+  transport) mounted at `/mcp` on the same FastAPI app/port, identical
+  pattern to `openwb-logger/app/mcp_server.py`. **mcp 2.x (2026-10)**
+  renamed `mcp.server.fastmcp.FastMCP` -> `mcp.server.mcpserver
+  .MCPServer` and moved `streamable_http_path`/`transport_security` off
+  the constructor and onto `streamable_http_app()` instead (now set in
+  `main.py`'s `app.mount()` call); `@tool()`/`@resource()` and the
+  `session_manager.run()` lifespan pattern are unchanged. Verified with
+  a real MCP client session over streamable HTTP (not just import/
+  pytest) before landing — bumping mcp here specifically needs this code
+  migration, not just a `requirements.txt` version bump (merging a bare
+  Dependabot PR diff for it would break the app outright at import time:
+  `from mcp.server.fastmcp import FastMCP` raises `ImportError` under
+  mcp 2.x). Two tools: `search_sessions` and
   `generate_report`, both thin wrappers around `web.py`'s own
   `_query_sessions`/`_generate_report` helpers (extracted specifically so
   both the HTTP routes and the MCP tools share one implementation, not
@@ -494,17 +505,19 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `ReportBuildIn.cost_basis`) — an AI assistant generating a report can
   ask for `"openwb"` explicitly, same as picking it from the dropdown in
   `report_review.html`. No new authentication — same no-auth, LAN-trust
-  model as the rest of the app. `FastMCP(...)` explicitly passes
+  model as the rest of the app. `main.py`'s `mcp.streamable_http_app(...)`
+  explicitly passes
   `transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)`
-  — without it, `FastMCP()` auto-enables a Host-header allowlist covering
-  only `localhost`/`127.0.0.1`/`::1` (its own unused-here `host` param
+  — without it, it auto-enables a Host-header allowlist covering only
+  `localhost`/`127.0.0.1`/`::1` (its own unused-here `host` param
   defaults to `"127.0.0.1"`, an assumption that it's running standalone on
   loopback rather than mounted inside another app), rejecting every real
   LAN request to `/mcp` with a raw 421 "Invalid Host header" — confirmed
   live as an actual bug in the sibling `openwb-logger` project
   (`mcp==1.29.0`, same mounted-inside-FastAPI pattern) and fixed here the
   same way before it ever shipped, since this project has the identical
-  setup.
+  setup. Re-verified this still holds after the mcp 2.x migration (a real
+  request with a fake LAN `Host` header, confirmed no 421).
 - `app/templates/index.html` — the landing page (`/`): a read-only charge-log
   overview (filter by source/vehicle/chargepoint/date — vehicle and
   chargepoint are `<select>`s populated from the currently-loaded sessions,

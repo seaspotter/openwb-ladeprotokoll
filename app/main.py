@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .db import close_pool, init_pool
 from .mcp_server import mcp
@@ -43,7 +44,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="openwb-ladeprotokoll", lifespan=lifespan)
 app.include_router(router)
-app.mount("/mcp", mcp.streamable_http_app())
+app.mount("/mcp", mcp.streamable_http_app(
+    # streamable_http_path="/" so this lands at exactly /mcp once mounted
+    # above, not /mcp/mcp (streamable_http_app()'s own default path is
+    # already "/mcp", meant for when it's the *only* app being served
+    # standalone, unmounted).
+    streamable_http_path="/",
+    # Disables MCPServer's DNS-rebinding Host-header check -- confirmed
+    # live as a real bug once already (see mcp_server.py's module
+    # docstring): it auto-enables whenever transport_security isn't given
+    # and the (unused-here) `host` param defaults to "127.0.0.1",
+    # rejecting every real LAN Host header with a 421. That default
+    # assumes this runs its own standalone server bound to loopback; this
+    # one is mounted inside the main FastAPI app instead and reached the
+    # same way as the rest of it -- explicitly no-auth-by-default,
+    # LAN-trust -- so the Host-based allowlist doesn't fit here any more
+    # than on any other route.
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+))
 # Vendored, not CDN-loaded -- this app has no external network dependency
 # anywhere else (every icon is inline SVG), and the statistik page's
 # Chart.js should keep working on a fully offline LAN. See DEPLOYMENT.md.
