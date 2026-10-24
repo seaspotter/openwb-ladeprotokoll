@@ -340,7 +340,19 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   sessions in one call — no second DB round trip for the by-vehicle
   breakdown — returning `{"periods": [...], "by_vehicle": [...]}`;
   `report_settings`'s `cost_basis` decides which cost figure to sum), and
-  report preview/generate/list/pdf/delete. `_query_sessions` (shared by
+  report preview/generate/list/pdf/delete.
+  **Every `templates.TemplateResponse(...)` call (all 20 of them) uses
+  the `(request, name, context=None, ...)` signature, `request` first**
+  — `fastapi` 0.153.0 pulls in `starlette` 1.x, which made the older
+  `(name, {"request": request, ...})` form raise/misbehave (`name`
+  silently becomes the context dict, which Jinja then can't use as a
+  cache key). This broke `openwb-logger`'s equivalent bump outright
+  (its own `v0.8.2` hotfix) before it was caught here first via real
+  `TestClient` HTTP requests through every route, not just `pytest`/
+  import success — those two alone don't exercise an actual route, so
+  they didn't and wouldn't catch this. Any new `TemplateResponse` call
+  added here must use the new-style signature from the start.
+  `_query_sessions` (shared by
   `GET /api/sessions`, MCP's `search_sessions`, and `/api/statistics`)
   takes a `split_pv_bat: bool = False` param controlling whether
   `match_and_decide` gets the session's `power_source_*_pct` fields and

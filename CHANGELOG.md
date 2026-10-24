@@ -6,6 +6,23 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Changed
+- `fastapi` 0.115.0 -> 0.153.0 (plus the mechanical `pyhanko`/GitHub
+  Actions Dependabot bumps alongside it). This pulls in `starlette`
+  1.9.0, a real major version jump (`fastapi`'s own constraint has no
+  upper bound, so there was no avoiding it this time) -- the exact same
+  breaking change that forced `openwb-logger`'s `v0.8.2` hotfix:
+  `Jinja2Templates.TemplateResponse()`'s signature is now strictly
+  `(request, name, context=None, ...)`, `request` first. Migrated all
+  20 call sites in `app/web.py` from the old `(name, {"request":
+  request, ...})` form (three times as many as `openwb-logger` had,
+  given this project's much larger htmx surface) -- verified this time
+  with real `TestClient` HTTP requests through every one of them (GET
+  and the POST/PUT panel-mutation paths), not just `pytest`/import
+  success, plus a live MCP client session and a full Playwright pass,
+  exactly the verification depth that should have caught the sibling
+  project's bug before it shipped.
+
 ## [0.5.1] - 2026-10-16
 
 ### Changed

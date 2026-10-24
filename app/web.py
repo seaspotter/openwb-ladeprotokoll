@@ -108,17 +108,17 @@ def _source_row(r) -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @router.get("/report-review", response_class=HTMLResponse)
 async def report_review(request: Request):
-    return templates.TemplateResponse("report_review.html", {"request": request})
+    return templates.TemplateResponse(request, "report_review.html")
 
 
 @router.get("/statistik", response_class=HTMLResponse)
 async def statistik(request: Request):
-    return templates.TemplateResponse("statistik.html", {"request": request})
+    return templates.TemplateResponse(request, "statistik.html")
 
 
 @router.get("/api/sources")
@@ -209,9 +209,9 @@ async def _sources_panel_response(
         s["last_fetch_at_display"] = _fmt_dt_de(r["last_fetch_at"])
         sources.append(s)
     return templates.TemplateResponse(
+        request,
         "hx/sources/panel.html",
         {
-            "request": request,
             "sources": sources,
             "app_settings": await get_app_settings(pool),
             "error": error,
@@ -383,9 +383,9 @@ async def _prices_panel_response(
     sources = await pool.fetch("SELECT id, name FROM sources ORDER BY name")
     settings = await get_report_settings(pool)
     return templates.TemplateResponse(
+        request,
         "hx/prices/panel.html",
         {
-            "request": request,
             "prices": prices,
             "sources": sources,
             "pv_price_per_kwh": settings["pv_price_per_kwh"],
@@ -486,8 +486,9 @@ async def api_backfill(source_id: int, body: BackfillIn):
 async def _backfill_panel_response(request: Request, pool, result_message: str | None = None):
     sources = await pool.fetch("SELECT id, name FROM sources ORDER BY name")
     return templates.TemplateResponse(
+        request,
         "hx/backfill/panel.html",
-        {"request": request, "sources": sources, "result_message": result_message},
+        {"sources": sources, "result_message": result_message},
     )
 
 
@@ -699,7 +700,7 @@ async def hx_filter_sources(request: Request, with_freshness: str | None = None)
                     'Details unter "⚙ Einstellungen")'
                 )
     return templates.TemplateResponse(
-        "hx/filters/sources.html", {"request": request, "sources": sources, "freshness": freshness},
+        request, "hx/filters/sources.html", {"sources": sources, "freshness": freshness},
     )
 
 
@@ -710,7 +711,7 @@ async def hx_filter_vehicles(request: Request):
     index.html's/report_review.html's are."""
     vehicles = await _distinct_values(get_pool(), "vehicle_name", None)
     return templates.TemplateResponse(
-        "hx/filters/vehicles.html", {"request": request, "vehicles": vehicles},
+        request, "hx/filters/vehicles.html", {"vehicles": vehicles},
     )
 
 
@@ -730,9 +731,10 @@ async def hx_filter_vehicle_chargepoint(
     vehicles = await _distinct_values(pool, "vehicle_name", sid)
     chargepoints = await _distinct_values(pool, "chargepoint_name", sid)
     return templates.TemplateResponse(
+        request,
         "hx/filters/vehicle_chargepoint.html",
         {
-            "request": request, "vehicles": vehicles, "chargepoints": chargepoints,
+            "vehicles": vehicles, "chargepoints": chargepoints,
             "selected_vehicle": vehicle, "selected_chargepoint": chargepoint,
         },
     )
@@ -779,7 +781,7 @@ async def hx_sessions(
             "flagged": s["cost_delta_flagged"],
         })
     return templates.TemplateResponse(
-        "hx/sessions/table.html", {"request": request, "sessions": rows, "count": len(rows)},
+        request, "hx/sessions/table.html", {"sessions": rows, "count": len(rows)},
     )
 
 
@@ -797,7 +799,7 @@ async def hx_fetch_now_all(request: Request):
             await fetch_service.fetch_source(pool, source, months=[current_month()])
         message = "Abruf abgeschlossen."
     response = templates.TemplateResponse(
-        "hx/_msg.html", {"request": request, "msg": message},
+        request, "hx/_msg.html", {"msg": message},
     )
     if rows:
         response.headers["HX-Trigger"] = "sources-changed"
@@ -848,8 +850,9 @@ async def _vehicles_panel_response(request: Request, pool, saved: str | None = N
         {"vehicle_name": r["vehicle_name"], "license_plate": r["license_plate"]} for r in rows
     ]
     return templates.TemplateResponse(
+        request,
         "hx/vehicles/panel.html",
-        {"request": request, "vehicles": vehicles, "saved": saved},
+        {"vehicles": vehicles, "saved": saved},
     )
 
 
@@ -957,9 +960,9 @@ async def hx_statistik(
         chart_data["cost"] = [p.cost for p in periods]
 
     return templates.TemplateResponse(
+        request,
         "hx/statistik/stats.html",
         {
-            "request": request,
             "empty": not periods,
             "stat_sessions": total_sessions,
             "stat_energy_display": _fmt_number(total_energy, 1, " kWh"),
@@ -1013,9 +1016,10 @@ async def _report_settings_panel_response(
     ]
     cert_created_at_display = _fmt_dt_de(settings["sign_pdf_cert_created_at"])
     return templates.TemplateResponse(
+        request,
         "hx/report_settings/panel.html",
         {
-            "request": request, "columns": columns, "settings": settings,
+            "columns": columns, "settings": settings,
             "cert_created_at_display": cert_created_at_display,
             "error": error, "saved": saved,
         },
@@ -1292,9 +1296,9 @@ async def _review_rows_response(
         "cost_used_display": _fmt_cost(totals["cost_used"]),
     }
     return templates.TemplateResponse(
+        request,
         "hx/report_review/sessions.html",
         {
-            "request": request,
             "sessions": display_rows,
             "price_entries": entries_list,
             "totals": totals_display,
@@ -1563,9 +1567,9 @@ async def _reports_list_response(
         summary["total_cost_display"] = _fmt_cost(summary["total_cost"])
         reports.append(summary)
     return templates.TemplateResponse(
+        request,
         "hx/report_review/reports.html",
         {
-            "request": request,
             "reports": reports,
             "error": error,
             "created_report_id": created_report_id,
@@ -1627,7 +1631,6 @@ def api_update(background_tasks: BackgroundTasks):
 
 def _update_panel_context(request: Request, *, state: str = "idle", msg: str | None = None) -> dict:
     return {
-        "request": request,
         "state": state,
         "current_commit": get_current_version(),
         "available": self_update_available(),
@@ -1637,7 +1640,7 @@ def _update_panel_context(request: Request, *, state: str = "idle", msg: str | N
 
 @router.get("/hx/update", response_class=HTMLResponse)
 def hx_update(request: Request):
-    return templates.TemplateResponse("hx/update/panel.html", _update_panel_context(request))
+    return templates.TemplateResponse(request, "hx/update/panel.html", _update_panel_context(request))
 
 
 @router.post("/hx/update/check", response_class=HTMLResponse)
@@ -1650,7 +1653,7 @@ def hx_update_check(request: Request):
     else:
         msg = f"Aktuell ({data['current']})"
     return templates.TemplateResponse(
-        "hx/_msg.html", {"request": request, "msg": msg},
+        request, "hx/_msg.html", {"msg": msg},
     )
 
 
@@ -1663,11 +1666,11 @@ def hx_update_run(request: Request, background_tasks: BackgroundTasks):
         ctx = _update_panel_context(request, state="restarting", msg="Startet neu...")
     else:
         ctx = _update_panel_context(request, msg=result["message"])
-    return templates.TemplateResponse("hx/update/panel.html", ctx)
+    return templates.TemplateResponse(request, "hx/update/panel.html", ctx)
 
 
 @router.get("/hx/update/ping", response_class=HTMLResponse)
 def hx_update_ping(request: Request):
     """Only reachable once the restarted process is actually back up --
     the response body itself is what tells the browser to reload."""
-    return templates.TemplateResponse("hx/update/ping.html", {"request": request})
+    return templates.TemplateResponse(request, "hx/update/ping.html")
