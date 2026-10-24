@@ -7,4 +7,4 @@ weasyprint==70.0
 mcp==2.3.0
 python-multipart==0.0.32
 cryptography==50.0.2
-pyhanko==0.37.0
+pyhanko==0.38.0
