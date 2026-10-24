@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-24
+
 ### Changed
 - `fastapi` 0.115.0 -> 0.153.0 (plus the mechanical `pyhanko`/GitHub
   Actions Dependabot bumps alongside it). This pulls in `starlette`
@@ -22,6 +24,10 @@ what that means in practice for this project.
   success, plus a live MCP client session and a full Playwright pass,
   exactly the verification depth that should have caught the sibling
   project's bug before it shipped.
+- `fastapi` 0.153.0 -> 0.156.8 (Dependabot rebased its own open PR to
+  this newer target once 0.153.0 landed above) -- resolves to the same
+  `starlette` 1.9.0 already in place, so no further migration needed;
+  verified with the same route-check script before merging.
 
 ## [0.5.1] - 2026-10-16
 
