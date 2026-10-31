@@ -6,6 +6,15 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-31
+
+### Changed
+- `fastapi` 0.156.8 -> 0.162.0 (pulls `starlette` 1.10.0, a minor bump
+  within the already-migrated 1.x line -- no further `TemplateResponse`
+  signature change, verified with the same route-check script as the
+  previous bump before merging). `pytest-asyncio` 1.4.0 -> 1.4.1
+  (dev-only test dependency, patch bump).
+
 ## [0.5.2] - 2026-10-24
 
 ### Changed
