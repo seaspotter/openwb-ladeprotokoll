@@ -6,6 +6,16 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-06
+
+### Changed
+- `python-multipart` 0.0.32 -> 0.0.33, `pytest`/`pytest-asyncio` (dev-only)
+  9.1.1 -> 9.2.0 and 1.4.0 -> 1.4.1.post1. The `pytest` bump needed a
+  manual commit rather than merging its Dependabot PR directly -- the
+  PR conflicted after `pytest-asyncio`'s own adjacent-line bump landed
+  first; resolved by bumping `pytest` on top of that, verified together
+  (`pip check`, full `pytest`) before pushing.
+
 ## [0.5.3] - 2026-10-31
 
 ### Changed
