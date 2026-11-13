@@ -6,7 +6,7 @@
 # broke the image build for exactly this reason; don't re-merge one
 # without also resolving this fastapi/mcp/starlette conflict first
 # (bumping mcp alone, see its own open Dependabot PRs, is the likely fix).
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 WORKDIR /app
 
