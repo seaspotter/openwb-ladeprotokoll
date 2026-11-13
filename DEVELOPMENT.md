@@ -2,13 +2,17 @@
 
 ## Branching
 
-- `main` — stable, releasable. Nothing lands here directly.
-- `dev` — active development. Day-to-day work and commits happen here.
+- `main` — the only branch. Day-to-day work and fixes land here via a
+  PR (or, for the repo owner, a direct commit/push) — see
+  `CHANGELOG.md` for what's shipped since the last release. `main` is
+  what `DEPLOYMENT.md`'s `git clone`/`git pull` instructions assume,
+  and what self-update should track.
 
-When `dev` is in good shape, merge it into `main` (PR or fast-forward
-merge) and tag a release there — see `CHANGELOG.md` for what's shipped
-since the last one. `main` is what `DEPLOYMENT.md`'s `git clone` /
-`git pull` instructions assume.
+(This project used a `dev`+`main` split earlier, retired once active
+feature development gave way to maintenance — see `CHANGELOG.md`'s
+`[Unreleased]` entry for when. If a deployment's self-update is still
+checked out on `dev`, switch it to `main`: `dev` no longer receives new
+commits.)
 
 ## Versioning and releasing
 
@@ -27,14 +31,12 @@ stable, load-bearing interface yet.
 
 To cut a release:
 
-1. On `dev`, rename `CHANGELOG.md`'s `## [Unreleased]` section to
-   `## [X.Y.Z] - YYYY-MM-DD` and start a fresh empty `[Unreleased]` above
-   it — step 3's release notes are extracted verbatim from this section,
-   so it has to exist and be named correctly *before* the tag is pushed.
-2. `git checkout main && git merge --ff-only dev` — fast-forward, not
-   `--no-ff` (see `openwb-logger/DEVELOPMENT.md` for why this matters for
-   self-update's `git describe`).
-3. `git tag vX.Y.Z && git push origin main --tags`.
+1. Rename `CHANGELOG.md`'s `## [Unreleased]` section to
+   `## [X.Y.Z] - YYYY-MM-DD` and start a fresh empty `[Unreleased]`
+   above it, on `main` (commit directly or via a PR) — step 2's release
+   notes are extracted verbatim from this section, so it has to exist
+   and be named correctly *before* the tag is pushed.
+2. `git tag vX.Y.Z && git push origin main --tags`.
 
 That last push triggers two workflows on the new tag:
 `.github/workflows/docker-publish.yml` builds and publishes the
