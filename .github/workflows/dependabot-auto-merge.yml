@@ -1,0 +1,49 @@
+name: Dependabot auto-merge
+
+# Auto-merges Dependabot PRs that are low-risk by this project's own
+# track record: GitHub Actions bumps (always safe here so far) and pip
+# patch-level bumps -- EXCEPT fastapi/mcp/starlette, which each broke
+# something before (the Python base-image break exposing a latent
+# fastapi/mcp/starlette conflict, the fastapi/starlette major-version
+# TemplateResponse signature break, the mcp 1.x -> 2.x API rename) even
+# though tests.yml/pr-build-check.yml both passed every time -- neither
+# catches a real-route-level or app-boot-level regression, only that the
+# pure-logic suite still passes and the image still builds. The Docker
+# base image itself is never auto-merged either, for the same reason.
+# Everything excluded here still needs a human to merge, same as before
+# (see DEVELOPMENT.md).
+#
+# Relies on branch protection requiring the "pytest"/"build" checks
+# (tests.yml/pr-build-check.yml) on main -- auto-merge only actually
+# waits for those if they're configured as required, otherwise it would
+# merge as soon as mergeable, checks or not.
+
+on: pull_request
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Enable auto-merge for low-risk updates
+        if: >
+          steps.metadata.outputs.package-ecosystem == 'github_actions' ||
+          (steps.metadata.outputs.package-ecosystem == 'pip' &&
+           steps.metadata.outputs.update-type == 'version-update:semver-patch' &&
+           !contains(steps.metadata.outputs.dependency-names, 'fastapi') &&
+           !contains(steps.metadata.outputs.dependency-names, 'mcp') &&
+           !contains(steps.metadata.outputs.dependency-names, 'starlette'))
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

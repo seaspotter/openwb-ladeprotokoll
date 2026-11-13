@@ -7,6 +7,13 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Added
+- Dependabot PRs now auto-merge when they're low-risk by this project's
+  own track record: GitHub Actions bumps, and pip patch-level bumps
+  except `fastapi`/`mcp`/`starlette` and the Docker base image, which
+  have each broken something before even with CI green. Requires the
+  new `pytest`/`build` checks below, now required via branch protection
+  on `main` (merging into it only -- the repo owner's own direct push
+  for releases is unaffected).
 - Two GitHub Actions workflows run on every pull request now (including
   Dependabot's), not just pushes to `main`/tags: `tests.yml` (the
   pure-logic `pytest` suite) and `pr-build-check.yml` (builds the Docker

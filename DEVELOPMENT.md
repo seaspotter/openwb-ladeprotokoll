@@ -59,7 +59,21 @@ merging to `main`. Neither workflow replaces the manual dependency
 review this project's own `CLAUDE.md` describes (checking what a bump
 actually resolves to, running the real route-level checks) — they catch
 the two cheapest categories of breakage (a pure-logic regression, an
-image that doesn't build at all) automatically, nothing more.
+image that doesn't build at all) automatically, nothing more. Both
+checks (`pytest`/`build`) are required via branch protection on `main`
+— required only for merging a PR into it, not for the repo owner's own
+direct `git push origin main` (the documented release flow above,
+unaffected: `enforce_admins` is off and there's no push restriction).
+
+`.github/workflows/dependabot-auto-merge.yml` auto-merges Dependabot
+PRs that are low-risk by this project's own track record: GitHub
+Actions bumps, and pip patch-level bumps except `fastapi`/`mcp`/
+`starlette` and the Docker base image — those three have each broken
+something before even with both checks green (a latent dependency
+conflict only the actual build exposed, a major-version signature
+change `pytest` never exercises, a renamed API), so they still need a
+human. See that workflow's own comment for the exact exclusion list
+before loosening it.
 
 ## Setup
 
