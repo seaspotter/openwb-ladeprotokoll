@@ -6,6 +6,15 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Added
+- Two GitHub Actions workflows run on every pull request now (including
+  Dependabot's), not just pushes to `main`/tags: `tests.yml` (the
+  pure-logic `pytest` suite) and `pr-build-check.yml` (builds the Docker
+  image, amd64 only, never pushed). Added after a Dependabot PR bumping
+  the Dockerfile's Python base image merged cleanly -- `pytest` never
+  touches the Dockerfile -- but broke `pip install` inside the image
+  outright, only caught after merging to `main`.
+
 ## [0.5.4] - 2026-11-06
 
 ### Changed

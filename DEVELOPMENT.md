@@ -48,6 +48,19 @@ to be published as a GitHub Release by hand afterward, which is what this
 workflow now does automatically — see `CHANGELOG.md`'s `[Unreleased]`
 entry for when this was added.)
 
+Two more workflows run on every pull request (including Dependabot's),
+not just tags: `.github/workflows/tests.yml` (the pure-logic `pytest`
+suite) and `.github/workflows/pr-build-check.yml` (builds the Docker
+image, amd64 only, never pushed — a sanity check that the image still
+builds at all). Added after a Dependabot PR bumping the Dockerfile's
+Python base image merged cleanly (pytest never touches the Dockerfile)
+but broke `pip install` inside the image outright, caught only after
+merging to `main`. Neither workflow replaces the manual dependency
+review this project's own `CLAUDE.md` describes (checking what a bump
+actually resolves to, running the real route-level checks) — they catch
+the two cheapest categories of breakage (a pure-logic regression, an
+image that doesn't build at all) automatically, nothing more.
+
 ## Setup
 
 Requires Python 3.12+ and a local Postgres (easiest via Docker).

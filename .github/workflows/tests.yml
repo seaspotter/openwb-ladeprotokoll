@@ -1,0 +1,24 @@
+name: Tests
+
+# Runs the pure-logic test suite (no DB/network, see DEVELOPMENT.md's
+# "Tests" section) on every push and pull request. Previously nothing ran
+# this in CI at all -- pytest only ever ran locally, if someone remembered
+# to. Mirrors the sibling openwb-logger project's own tests.yml.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements-dev.txt
+
+      - run: pytest
