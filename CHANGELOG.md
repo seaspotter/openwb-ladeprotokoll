@@ -15,6 +15,16 @@ what that means in practice for this project.
   touches the Dockerfile -- but broke `pip install` inside the image
   outright, only caught after merging to `main`.
 
+### Fixed
+- Bare `pytest` (no `python -m`) couldn't find the `app` package at all
+  (`ModuleNotFoundError`) -- it only adds `tests/` itself to `sys.path`,
+  not the repo root. This went unnoticed because every local run used
+  `python -m pytest`, which masks it by prepending `cwd` itself; the new
+  `tests.yml` workflow runs the bare `pytest` this project's own
+  `CLAUDE.md` documents as the command, surfacing it immediately. Fixed
+  via `pythonpath = ["."]` in `pyproject.toml`'s new
+  `[tool.pytest.ini_options]` section.
+
 ## [0.5.4] - 2026-11-06
 
 ### Changed

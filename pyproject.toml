@@ -1,3 +1,12 @@
+[tool.pytest.ini_options]
+# Without this, bare `pytest` (no `python -m`) never puts the repo root
+# on sys.path -- it only adds tests/ itself, so every `from app.x import
+# y` fails with ModuleNotFoundError. `python -m pytest` masked this
+# locally all along (it prepends cwd to sys.path itself), so this went
+# unnoticed until the new PR-triggered tests.yml workflow ran the bare
+# `pytest` this project's own CLAUDE.md documents as the command.
+pythonpath = ["."]
+
 [tool.ruff]
 line-length = 100
 
