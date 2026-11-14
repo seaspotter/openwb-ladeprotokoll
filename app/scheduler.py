@@ -1,23 +1,15 @@
 """Daily background fetch: refetches the current month for every enabled
-source, so no manual "Jetzt abrufen" click is needed to catch up on
-today's charging sessions.
+source, so no manual "Jetzt abrufen" click is needed to catch up.
 
-Runs once immediately at app startup (so a freshly deployed instance isn't
-empty until the first scheduled tick), then daily at a configurable
-wall-clock time (app_settings.auto_fetch_time, default shortly after
-midnight) -- computed fresh from the current setting each cycle via
-`_next_run_at`, so a time changed while the loop is sleeping takes effect
-from the next wake, not instantly (same "applies from the next cycle"
-tradeoff already accepted for the enabled flag below). The per-source lock
-inside fetch_service.py already stops this from racing a concurrent manual
-fetch-now/backfill on the same source.
+Runs once at startup (so a fresh deploy isn't empty), then daily at a
+configurable time (app_settings.auto_fetch_time) -- recomputed each cycle
+via `_next_run_at`, so a changed time applies from the next wake, not
+instantly. fetch_service.py's per-source lock already stops this from
+racing a concurrent manual fetch/backfill.
 
-Can be turned off entirely via the "Automatischer Abruf" checkbox
-(Einstellungen -> Quellen, app_settings.auto_fetch_enabled) -- the loop
-below keeps running either way, just skipping the actual fetch (including
-the startup one) while disabled, so re-enabling it later doesn't need a
-restart.
-"""
+Can be disabled via app_settings.auto_fetch_enabled -- the loop keeps
+running either way, just skipping the fetch, so re-enabling needs no
+restart."""
 from __future__ import annotations
 
 import asyncio

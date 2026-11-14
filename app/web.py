@@ -95,6 +95,13 @@ def _fmt_dt_de(dt: datetime | None) -> str:
     return f"{dt.day}.{dt.month}.{dt.year}, {dt:%H:%M:%S}"
 
 
+def _sources_changed(response: Response) -> Response:
+    """Fires htmx's HX-Trigger so other elements' hx-trigger="sources-
+    changed from:body" refresh (e.g. filter dropdowns)."""
+    response.headers["HX-Trigger"] = "sources-changed"
+    return response
+
+
 def _source_row(r) -> dict:
     return {
         "id": r["id"],
@@ -238,18 +245,14 @@ async def hx_create_source(request: Request):
     await pool.execute(
         "INSERT INTO sources (name, base_url, enabled) VALUES ($1, $2, true)", name, base_url,
     )
-    response = await _sources_panel_response(request, pool)
-    response.headers["HX-Trigger"] = "sources-changed"
-    return response
+    return _sources_changed(await _sources_panel_response(request, pool))
 
 
 @router.delete("/hx/sources/{source_id}", response_class=HTMLResponse)
 async def hx_delete_source(request: Request, source_id: int):
     pool = get_pool()
     await pool.execute("DELETE FROM sources WHERE id = $1", source_id)
-    response = await _sources_panel_response(request, pool)
-    response.headers["HX-Trigger"] = "sources-changed"
-    return response
+    return _sources_changed(await _sources_panel_response(request, pool))
 
 
 @router.post("/hx/sources/{source_id}/fetch-now", response_class=HTMLResponse)
@@ -258,9 +261,7 @@ async def hx_fetch_now(request: Request, source_id: int):
     source = await _require_source(pool, source_id)
     result = await fetch_service.fetch_source(pool, source, months=[current_month()])
     error = None if result.ok else result.error
-    response = await _sources_panel_response(request, pool, error=error)
-    response.headers["HX-Trigger"] = "sources-changed"
-    return response
+    return _sources_changed(await _sources_panel_response(request, pool, error=error))
 
 
 @router.put("/hx/app-settings", response_class=HTMLResponse)
@@ -523,9 +524,7 @@ async def hx_backfill_run(request: Request):
         if result.ok else f"Fehler: {result.error}"
     )
     response = await _backfill_panel_response(request, pool, result_message=message)
-    if result.ok:
-        response.headers["HX-Trigger"] = "sources-changed"
-    return response
+    return _sources_changed(response) if result.ok else response
 
 
 async def _fetch_session_rows(
@@ -801,9 +800,7 @@ async def hx_fetch_now_all(request: Request):
     response = templates.TemplateResponse(
         request, "hx/_msg.html", {"msg": message},
     )
-    if rows:
-        response.headers["HX-Trigger"] = "sources-changed"
-    return response
+    return _sources_changed(response) if rows else response
 
 
 @router.get("/api/vehicles")
@@ -1474,10 +1471,9 @@ async def _generate_report(
             key_pem = await get_signing_key_pem(pool)
             if key_pem:
                 try:
-                    # pyhanko's sign_pdf() runs its own asyncio.run() internally,
-                    # which can't be called from inside this already-running
-                    # event loop -- to_thread sidesteps that (a real bug caught
-                    # during integration testing, not a hypothetical one).
+                    # pyhanko's sign_pdf() runs its own asyncio.run(), which
+                    # can't be called from an already-running event loop --
+                    # to_thread sidesteps that.
                     pdf_bytes = await asyncio.to_thread(
                         sign_pdf_bytes, pdf_bytes, settings["sign_pdf_certificate_pem"], key_pem
                     )

@@ -178,20 +178,12 @@ def _build_cells(session: dict, columns: list[str], cost: float | None) -> dict[
 def build(
     sessions: list[dict], columns: list[str] | None = None, cost_basis: str = "corrected"
 ) -> ReportData:
-    """`sessions` is a list of dicts, each already carrying a session's own
-    fields (id, time_begin, time_end, time_charged_seconds, vehicle_name,
-    odometer, chargepoint_name, chargepoint_serial_number, energy_kwh,
-    energy_discharged_kwh, range_charged_km, meter_start_kwh,
-    meter_end_kwh, cost_openwb) plus its resolved price decision
-    (cost_corrected, cost_used, price_entry -- as produced by
-    price_entries.decide_price, price_entry being a PriceEntry dict or
-    None).
+    """`sessions`: dicts with each session's own fields plus its resolved
+    price decision (price_entries.decide_price's output).
 
-    Rows are always sorted chronologically ascending (oldest first,
-    latest at the bottom) regardless of the order `sessions` arrives in --
-    a printed ledger reads that way, unlike the review UI's session list
-    (newest first, better for "did today's fetch show up").
-    """
+    Rows always sort chronologically ascending (oldest first) regardless
+    of input order -- a printed ledger reads that way, unlike the review
+    UI's newest-first list."""
     if cost_basis not in COST_BASES:
         raise ReportBuildError(f"Unbekannte cost_basis: {cost_basis!r}")
     cols = _validate_columns(columns)

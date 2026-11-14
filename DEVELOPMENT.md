@@ -150,7 +150,7 @@ JSONB codec (`app/db.py`'s `_init_connection`) registered, so pass
 |---|---|
 | `app/config.py` | Infra-level config (DB URL) — env vars, fixed per process |
 | `app/db.py` | asyncpg pool, schema bootstrap (`CREATE TABLE IF NOT EXISTS`) |
-| `app/sources.py` | Pure: `Source` dataclass, `base_url` validation/normalization |
+| `app/sources.py` | Pure: `base_url` validation/normalization |
 | `app/chargelog_parse.py` | Pure: one raw charge-log JSON record -> normalized `sessions` row + natural key |
 | `app/openwb_client.py` | httpx GET of one source's `data/charge_log/<yyyymm>.json` |
 | `app/fetch_service.py` | Orchestrates fetch -> parse -> upsert; per-source lock so manual/daily/backfill triggers can't race |
@@ -179,9 +179,10 @@ confirmed about the raw JSON shape. Field mapping was cross-checked twice
 against real data from the same openWB installation (2026-09-03): first
 against a CSV export of the Ladeprotokoll UI, then against an actual
 `chargelog-*.json` file — the whole sample file (35 records) parses
-cleanly with no duplicate natural keys and no anomalous implied €/kWh
-price, a useful smoke test to rerun (`parse_record` + `natural_key` over
-every record in a file) if a new sample ever surfaces.
+cleanly with no duplicate `(source_id, chargepoint_serial_number,
+time_begin)` triples and no anomalous implied €/kWh price, a useful
+smoke test to rerun (`parse_record` over every record in a file) if a
+new sample ever surfaces.
 
 Four corrections came out of that, all load-bearing:
 

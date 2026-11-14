@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from app.chargelog_parse import ChargeLogParseError, natural_key, parse_record
+from app.chargelog_parse import ChargeLogParseError, parse_record
 
 # Real record from a live openWB installation's chargelog-202608.json
 # (shared 2026-09-03), used verbatim so the parser is checked against
@@ -192,12 +192,3 @@ def test_parse_prio_true():
     assert row["vehicle_prio"] == "true"
 
 
-def test_natural_key():
-    key = natural_key(source_id=1, record=REAL_RECORD)
-    assert key == (1, "241248169", datetime(2026, 8, 2, 8, 24, 55))
-
-
-def test_natural_key_missing_serial_raises():
-    record = {**REAL_RECORD, "chargepoint": {"id": 1}}
-    with pytest.raises(ChargeLogParseError):
-        natural_key(source_id=1, record=record)

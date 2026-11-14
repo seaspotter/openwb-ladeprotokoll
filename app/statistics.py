@@ -3,31 +3,19 @@ shape web.py's _query_sessions returns) -> aggregated statistics for the
 /statistik page -- either per-period (month/year, aggregate()) or
 per-vehicle (aggregate_by_vehicle()).
 
-The energy-source split (grid/PV/battery/chargepoint) is computed as
-absolute kWh per bucket, not an averaged percentage -- averaging each
-session's power_source_*_pct directly would misrepresent the actual
-energy mix once sessions of very different sizes are mixed (a 2 kWh
-top-up at 100% grid and a 40 kWh mostly-PV session shouldn't count
-equally toward "average PV share"). Each session's own energy_kwh *
-power_source_pv_pct/100 (etc.) is summed instead, matching how
-report_build.py already treats energy_kwh as the one figure worth
-summing across sessions -- see chargelog_parse.py's docstring for why.
+The energy-source split (grid/PV/battery/chargepoint) is absolute kWh per
+bucket (each session's energy_kwh * power_source_pv_pct/100, summed), not
+an averaged percentage -- averaging would misrepresent the mix once
+session sizes vary a lot.
 
-The "cost" figure follows the same one-cost-column simplification
-report_build.py uses (cost_basis="openwb"|"corrected", never both side by
-side): callers pass sessions already carrying cost_openwb/cost_used from
-_query_sessions, and both aggregate functions pick whichever cost_basis
-says.
+"cost" follows report_build.py's one-column simplification
+(cost_basis="openwb"|"corrected", never both).
 
-cost_grid/cost_pv/cost_bat are the same total split by source instead of
-summed into one figure -- for the /statistik Kosten chart's stacked bars.
-Only meaningful (and only accumulated) when cost_basis="corrected": a
-session only carries cost_corrected_grid/_pv/_bat when web.py's
-_query_sessions was called with split_pv_bat=True (see that function's
-docstring -- currently only /api/statistics does), and openWB's own cost
-was never priced per source to begin with, so there's nothing to split
-when cost_basis="openwb". cost_grid+cost_pv+cost_bat always equals cost
-exactly when cost_basis="corrected" (all three are 0.0 otherwise).
+cost_grid/cost_pv/cost_bat split that same total by source instead of
+summing it, for the Kosten chart's stacked bars -- only meaningful (and
+only accumulated) when cost_basis="corrected", since openWB's own cost
+was never priced per source. Always sums back to cost exactly;
+0.0 otherwise.
 """
 from __future__ import annotations
 
