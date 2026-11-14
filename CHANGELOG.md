@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-14
+
 ### Changed
 - Full code-review cleanup pass: removed three genuinely dead functions
   kept alive only by their own unit tests (`price_entries.corrected_cost`
