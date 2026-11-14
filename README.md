@@ -51,6 +51,12 @@ shipped and what's next.
   is immutable — the rendered PDF and a frozen snapshot of every included
   session and price used are stored, so it stays defensible even if the
   underlying openWB data or price entries are edited afterward.
+- **Optional self-signed digital PDF signing**: embeds a cryptographic
+  signature (PAdES) in generated reports, proving the file hasn't been
+  altered since generation — an extension of the immutability guarantee
+  above, not a vouch for the correctness of any price correction inside
+  it. Self-signed, so recipients have to import the downloadable public
+  certificate to see it as trusted rather than merely intact.
 - **Optional in-app self-update**, same pattern as the sibling
   [openwb-logger](https://github.com/seaspotter/openwb-logger) project —
   see [DEPLOYMENT.md](DEPLOYMENT.md).

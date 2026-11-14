@@ -1,35 +1,19 @@
-"""Report-wide display settings: which PDF columns are pre-selected by
-default (the *only* place columns are chosen -- there is deliberately no
-second, per-report column picker; an earlier version had one in the review
-UI too and it was confusing to have the same choice in two places),
-whether the single "Kosten" column/total shows openWB's own cost or the
-price-corrected one, whether generated PDFs include the signature line,
-page orientation, the two global EUR/kWh rates (`pv_price_per_kwh`,
-`bat_price_per_kwh`) `price_entries.corrected_cost` uses for the PV- and
-battery-sourced share of a session's energy -- a `price_entries` row only
-ever prices the grid-sourced share (see that module's docstring) -- and
-whether generated PDFs get a self-signed digital signature embedded
-(`sign_pdf_*`, see `pdf_signing.py` for what that actually proves and
-doesn't; unrelated to `show_signature_line`'s cosmetic blank line). A
-single row in `report_settings` (id=1, enforced by a CHECK constraint) --
-read via GET, written via PUT `/api/report-settings` (see web.py),
-editable from the Einstellungen modal (`_settings_modal.html`, included on
-every page).
+"""Report-wide display settings: PDF columns (the only place they're
+chosen), cost basis, orientation, signature line, the PV/battery EUR/kWh
+rates (see price_entries.py), and digital-signing config (see
+pdf_signing.py). A single row in `report_settings` (id=1), read/written
+via `/api/report-settings` (web.py), editable from the Einstellungen
+modal.
 
-`get_settings()` deliberately never returns `sign_pdf_private_key_pem` --
-that column is this install's whole signing identity, and leaking it over
-`GET /api/report-settings` would let anyone forge a "validly signed by
-this install" PDF, defeating the point. `get_signing_key_pem()` is a
-separate, dedicated accessor for the one caller (web.py's
-`_generate_report`) that actually needs it; `regenerate_certificate()`/
-`ensure_certificate()` are the only writers of the cert/key columns --
-`update_settings()`'s general patch path can set `sign_pdf_enabled` but
-never touches the cert/key columns, regardless of what a caller's patch
-dict happens to contain.
+`get_settings()` never returns `sign_pdf_private_key_pem` -- that's this
+install's whole signing identity, and the JSON route returns this dict
+wholesale. `get_signing_key_pem()` is the one dedicated accessor for the
+caller that actually needs it (web.py's `_generate_report`).
+`regenerate_certificate()`/`ensure_certificate()` are the only writers of
+the cert/key columns; `update_settings()`'s general patch path never
+touches them.
 
-`validate()` is pure (no DB/HTTP) so it and its error messages are cheap
-to unit test directly, matching this project's other *_entries.py-style
-modules.
+`validate()` is pure, unit tested directly.
 """
 from __future__ import annotations
 

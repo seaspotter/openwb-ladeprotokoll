@@ -3,7 +3,10 @@
 Loose notes on where this is headed, not a commitment. Reorder freely —
 open an issue or just start working if something here matters to you.
 
-## Done (v0.1.0, released 2026-09-04)
+## Done
+
+Spans every release so far, not just one -- see `CHANGELOG.md` for exact
+versions/dates.
 
 - [x] Source config + `base_url` validation/normalization (`app/sources.py`)
 - [x] Charge-log JSON -> normalized `sessions` row parsing (`app/chargelog_parse.py`)
@@ -140,7 +143,7 @@ open an issue or just start working if something here matters to you.
       being asked again.
 - [x] Statistik's corrected cost splits a session by its actual
       grid/PV/battery mix instead of applying one flat rate to the total
-      kWh (`price_entries.corrected_cost`) — the matched `price_entries`
+      kWh (`price_entries.corrected_cost_breakdown`) — the matched `price_entries`
       row still only prices the grid share; two new global settings,
       "PV-Preis"/"Batterie-Preis" (`report_settings.pv_price_per_kwh`/
       `bat_price_per_kwh`, top of the "Preise" panel), price the rest.
@@ -224,6 +227,13 @@ open an issue or just start working if something here matters to you.
       call runs its own internal `asyncio.run()`, which can't be called
       from inside the app's already-running event loop -- fixed via
       `asyncio.to_thread(...)`.
+- [x] CI/Dependabot hardening: a `pytest`/Docker-build-check pair now
+      runs on every pull request (required status checks on `main`),
+      low-risk Dependabot PRs (GitHub Actions bumps, pip patch-level
+      bumps except `fastapi`/`mcp`/`starlette` and the Docker base
+      image) auto-merge, and the `dev`+`main` branch split was retired
+      in favor of trunk-based development on `main` alone, now that the
+      project is in maintenance rather than active feature work.
 
 ## Next
 

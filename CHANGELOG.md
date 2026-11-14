@@ -7,6 +7,25 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Changed
+- Full code-review cleanup pass: removed three genuinely dead functions
+  kept alive only by their own unit tests (`price_entries.corrected_cost`
+  -- `decide_price` already calls `corrected_cost_breakdown` directly;
+  `sources.Source`, a dataclass never instantiated anywhere;
+  `chargelog_parse.natural_key`, superseded by Postgres's own `ON
+  CONFLICT` natural-key enforcement) -- their valuable test coverage was
+  migrated to call the real functions directly, not just deleted.
+  Extracted a tiny `_sources_changed()` helper in `web.py` for the
+  `HX-Trigger: sources-changed` response-header pattern that was
+  repeated verbatim across five route handlers. Trimmed several module
+  docstrings that had grown into multi-paragraph historical narrative
+  over a few rounds of changes, keeping only the load-bearing "why"
+  facts (units, invariants, security notes) -- the history itself
+  belongs in git/this CHANGELOG, not a standing code comment. Fixed
+  several now-stale documentation references to the removed functions
+  (`CLAUDE.md`, `DEVELOPMENT.md`, `ROADMAP.md`), a missing "digital PDF
+  signing" entry in `README.md`'s feature list, and `ROADMAP.md`'s
+  "Done" section header, which had been pinned to the very first release
+  despite the list having grown to cover dozens of releases since.
 - Retired the `dev`+`main` branch split -- `main` is the only branch
   now, fits better now that this project is in maintenance rather than
   active feature development. Day-to-day work and fixes go straight to

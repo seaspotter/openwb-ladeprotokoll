@@ -98,17 +98,15 @@ def corrected_cost_breakdown(
     pv_price_per_kwh: float = 0.0,
     bat_price_per_kwh: float = 0.0,
 ) -> CostBreakdown | None:
-    """Prices a session's actual grid/PV/battery energy mix instead of one
-    flat rate over the total: `price_per_kwh` (the matched price_entries
-    rate) only ever prices the grid share; PV/battery each get their own
-    global rate from report_settings, since self-produced energy isn't
-    covered by a grid tariff. Chargepoint share (power_source.cp, rare) is
-    folded into the battery bucket -- it's local storage, not a grid draw.
+    """Prices a session's actual grid/PV/battery mix, not one flat rate:
+    `price_per_kwh` only prices the grid share; PV/battery get their own
+    global rate from report_settings (self-produced energy has no grid
+    tariff). Chargepoint share folds into battery (local storage, not a
+    grid draw).
 
-    power_source_*_pct all None (older session, or a source that never
-    populates the split) defaults to 100% grid, the same flat-rate result
-    this had before the split existed -- never invents a PV/battery
-    discount that may not have applied."""
+    All power_source_*_pct None defaults to 100% grid -- same result as
+    before the split existed, never inventing a PV/battery discount that
+    may not have applied."""
     if energy_kwh is None:
         return None
     grid_pct = power_source_grid_pct if power_source_grid_pct is not None else 100.0
@@ -119,31 +117,6 @@ def corrected_cost_breakdown(
         pv=energy_kwh * (pv_pct / 100) * pv_price_per_kwh,
         bat=energy_kwh * (bat_pct / 100) * bat_price_per_kwh,
     )
-
-
-def corrected_cost(
-    *,
-    energy_kwh: float | None,
-    price_per_kwh: float,
-    power_source_grid_pct: float | None = None,
-    power_source_pv_pct: float | None = None,
-    power_source_bat_pct: float | None = None,
-    power_source_cp_pct: float | None = None,
-    pv_price_per_kwh: float = 0.0,
-    bat_price_per_kwh: float = 0.0,
-) -> float | None:
-    """`corrected_cost_breakdown`'s total -- see that function for the logic."""
-    breakdown = corrected_cost_breakdown(
-        energy_kwh=energy_kwh,
-        price_per_kwh=price_per_kwh,
-        power_source_grid_pct=power_source_grid_pct,
-        power_source_pv_pct=power_source_pv_pct,
-        power_source_bat_pct=power_source_bat_pct,
-        power_source_cp_pct=power_source_cp_pct,
-        pv_price_per_kwh=pv_price_per_kwh,
-        bat_price_per_kwh=bat_price_per_kwh,
-    )
-    return breakdown.total if breakdown is not None else None
 
 
 def decide_price(

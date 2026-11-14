@@ -1,64 +1,33 @@
 """Pure parsing of one raw `data/charge_log/<yyyymm>.json` record (as served
-by openWB, see openwb_client.py) into a normalized row ready for the
-`sessions` table (see db.py) plus its natural key.
+by openWB, see openwb_client.py) into a normalized row for the `sessions`
+table (see db.py).
 
-Confirmed record shape, cross-checked twice against real data from the same
-openWB installation (2026-09-03): first against a CSV export of the
-Ladeprotokoll UI, then against an actual `chargelog-202608.json` file. The
-second pass overturned one assumption from the first (time.begin/end's wire
-type) and caught two unit bugs the CSV alone couldn't reveal (CSV values are
-already unit-converted for display):
+Record shape and load-bearing unit/field notes:
 
     chargepoint{id, name, serial_number,
-                imported_at_start, imported_at_end,   # Wh, cumulative meter reading
-                exported_at_start, exported_at_end}   # Wh, V2H/V2G feed-back meter reading
-    vehicle{id, name, chargemode, prio,               # prio is a bool, not a priority tier
+                imported_at_start, imported_at_end,   # Wh, cumulative meter
+                exported_at_start, exported_at_end}   # Wh, V2H/V2G meter
+    vehicle{id, name, chargemode, prio,     # prio: bool, not a tier
             rfid, soc_at_start, soc_at_end,
             range_at_start, range_at_end, odometer}
-    time{begin, end,           # "MM/DD/YYYY, HH:MM:SS" strings, e.g. "08/02/2026, 08:24:55"
-         time_charged}         # "H:MM" (no seconds), e.g. "23:18", "35:02" for a >24h span
-    data{costs,                # EUR, already in the display unit -- no conversion
-         power_source{grid, cp, bat, pv},  # FRACTIONS 0.0-1.0, not already a percentage
-         imported_since_mode_switch,   # Wh, per-row -- this is the UI's "Energie" column
-         imported_since_plugged,       # Wh, cumulative since plug-in -- "Energie seit Anstecken"
-         exported_since_mode_switch,   # Wh, per-row V2H/V2G discharge (0 if unused)
-         exported_since_plugged,       # Wh, cumulative V2H/V2G discharge
-         range_charged,        # km, already in the display unit
-         power}                # instantaneous charging power in W -- not currently persisted
+    time{begin, end,           # "MM/DD/YYYY, HH:MM:SS"
+         time_charged}         # "H:MM", no seconds, can exceed 24h
+    data{costs,                            # EUR, display unit, no conversion
+         power_source{grid, cp, bat, pv},   # fractions 0.0-1.0, not %
+         imported_since_mode_switch,   # Wh, per-row -- UI's "Energie" column
+         imported_since_plugged,       # Wh, cumulative since plug-in
+         exported_since_mode_switch,   # Wh, per-row V2H/V2G (0 if unused)
+         exported_since_plugged,       # Wh, cumulative V2H/V2G
+         range_charged,        # km, display unit
+         power}                # instantaneous W, not persisted
 
-Two corrections from the CSV cross-check, both load-bearing for report
-correctness (see git history / CHANGELOG for the incident):
-
-- **"Energie" (the UI's headline per-row kWh figure, the one that should be
-  summed for a report total) is data.imported_since_mode_switch, not
-  imported_since_plugged.** A single plug-in that switches charge mode
-  (e.g. Sofort -> PV) produces multiple consecutive charge-log rows;
-  imported_since_plugged is the *cumulative* total across all of them.
-  Summing the cumulative field across a session's rows would silently
-  double- (or triple-, ...) count energy. energy_kwh below is the per-row
-  figure; energy_since_plugged_kwh is the cumulative one, kept for
-  reference/audit but must never be summed across rows of the same
-  plug-in.
-- **time.time_charged is "H:MM" (hours:minutes), not "H:MM:SS".** Values
-  like "23:18" or "35:02" (over 24) are common (a session can stay plugged
-  in, with charging paused, across several calendar days).
-
-Two more corrections from the raw-JSON cross-check (the CSV export already
-had these converted, so it couldn't reveal them):
-
-- **Energy figures are in Wh, not kWh.** `imported_since_mode_switch`,
-  `imported_since_plugged`, `exported_since_mode_switch`, and the
-  chargepoint meter readings (`imported_at_start`/`imported_at_end`) are
-  all watt-hours; every `_kwh`-suffixed field below divides by 1000.
-- **power_source shares are fractions (0.0-1.0), not percentages.** The
-  CSV's "Energieanteil ..." percentage columns are the raw fraction times
-  100 for display; `_pct`-suffixed fields below apply that same ×100.
-
-Still unconfirmed: `vehicle.prio`'s real-world value range beyond the
-plain booleans seen so far (stored as the lowercase strings "true"/"false",
-not Python's "True"/"False", to keep the DB free of a language-specific
-repr); and any record where a V2H/V2G-capable vehicle actually produces a
-nonzero `exported_since_mode_switch` (every sample seen has 0 there).
+Sum `imported_since_mode_switch` (per-row) for a report total, never
+`imported_since_plugged` (cumulative since plug-in) -- a mode-switching
+plug-in produces multiple rows, so summing the cumulative field double-
+counts energy. Energy fields are Wh (every `_kwh` field below divides by
+1000); power_source shares are fractions (`_pct` fields below multiply by
+100). `vehicle.prio` is stored as the lowercase string "true"/"false", not
+Python's repr.
 """
 from __future__ import annotations
 
@@ -189,16 +158,6 @@ def _bool_str(value: Any) -> str | None:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
-
-
-def natural_key(source_id: int, record: dict) -> tuple[int, str, datetime]:
-    chargepoint = record.get("chargepoint") or {}
-    time_block = record.get("time") or {}
-    serial = chargepoint.get("serial_number")
-    if not serial:
-        raise ChargeLogParseError("Record is missing chargepoint.serial_number")
-    begin = _parse_timestamp(time_block.get("begin"), field="time.begin")
-    return (source_id, str(serial), begin)
 
 
 def parse_record(record: dict) -> ParsedSession:

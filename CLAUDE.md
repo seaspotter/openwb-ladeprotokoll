@@ -45,10 +45,9 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   `DEFAULT 'corrected'` backfills every report generated before this
   column existed, matching what `report_settings.DEFAULT_COST_BASIS` was
   at the time.
-- `app/sources.py` — **pure**: `Source` dataclass plus `base_url`
-  validation/normalization (bare IP, host:port, or full URL, all
-  normalized to `scheme://host[:port]` with no trailing slash). Unit
-  tested.
+- `app/sources.py` — **pure**: `base_url` validation/normalization (bare
+  IP, host:port, or full URL, all normalized to `scheme://host[:port]`
+  with no trailing slash). Unit tested.
 - `app/chargelog_parse.py` — **pure**: one raw charge-log JSON record ->
   a normalized `sessions` row + its natural key
   `(source_id, chargepoint_serial_number, time_begin)`. Field mapping was
@@ -113,8 +112,8 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   exceeds `DELTA_FLAG_THRESHOLD` (0.01). Always prices `energy_kwh`
   (per-row), never `energy_since_plugged_kwh` (cumulative) — see
   `chargelog_parse.py`'s docstring for why that distinction matters.
-  `corrected_cost` splits a session's energy by source rather than
-  applying one flat rate to the total: the matched price entry's own
+  `corrected_cost_breakdown` splits a session's energy by source rather
+  than applying one flat rate to the total: the matched price entry's own
   `price_per_kwh` only ever prices the **grid**-sourced share
   (`power_source_grid_pct`); the PV- and battery-sourced shares
   (`power_source_pv_pct`/`power_source_bat_pct`) are priced at
@@ -135,10 +134,9 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   or a data source that never populates it), the whole session defaults
   to 100% grid — the same flat-rate result this function always had, and
   the conservative choice when the real mix is unknown (it never invents
-  a PV/battery discount that may not have applied). `corrected_cost` is
-  now a thin wrapper around `corrected_cost_breakdown`, which returns the
-  three components (`CostBreakdown.grid`/`.pv`/`.bat`, plus a `.total`
-  property) separately rather than pre-summed — added so `/statistik`'s
+  a PV/battery discount that may not have applied). Returns the three
+  components separately (`CostBreakdown.grid`/`.pv`/`.bat`, plus a
+  `.total` property) rather than pre-summed — added so `/statistik`'s
   Kosten chart can stack Netz-/PV-/Speicher-Kosten per period the same
   way its Energiequellen chart stacks kWh, not just show one blended bar.
   Unit tested, including the split-pricing, breakdown-components, and
@@ -175,7 +173,7 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   selection — see `_settings_modal.html`), `cost_basis`, `orientation`
   ("portrait"/"landscape"), `show_signature_line`, and
   `pv_price_per_kwh`/`bat_price_per_kwh` (both `>= 0`, default `0`, the
-  two global rates `price_entries.corrected_cost` uses for a session's
+  two global rates `price_entries.corrected_cost_breakdown` uses for a session's
   PV-/battery-sourced energy share, read **only** by `/api/statistics` —
   see `price_entries.py`'s and `web.py`'s notes on why this stays scoped
   to Statistik). Still stored in `report_settings` despite no longer
@@ -357,7 +355,7 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   takes a `split_pv_bat: bool = False` param controlling whether
   `match_and_decide` gets the session's `power_source_*_pct` fields and
   `report_settings.pv_price_per_kwh`/`bat_price_per_kwh` (see
-  `price_entries.corrected_cost`'s note) — **only** `/api/statistics`
+  `price_entries.corrected_cost_breakdown`'s note) — **only** `/api/statistics`
   passes `True`; every other caller keeps the default `False`, i.e. the
   plain flat `price_entries`-rate-times-`energy_kwh` figure Übersicht,
   Bericht erstellen, and generated reports/PDFs have always shown.

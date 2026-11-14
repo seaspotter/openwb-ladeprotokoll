@@ -4,7 +4,6 @@ import pytest
 
 from app.price_entries import (
     DELTA_FLAG_THRESHOLD,
-    corrected_cost,
     corrected_cost_breakdown,
     decide_price,
     match_and_decide,
@@ -120,47 +119,28 @@ def test_match_open_ended_valid_to_applies_indefinitely():
     assert result == entry
 
 
-def test_corrected_cost():
-    assert corrected_cost(energy_kwh=9.7, price_per_kwh=0.30) == pytest.approx(2.91)
-
-
-def test_corrected_cost_none_energy_returns_none():
-    assert corrected_cost(energy_kwh=None, price_per_kwh=0.30) is None
-
-
-def test_corrected_cost_unknown_split_treated_as_all_grid():
+def test_corrected_cost_breakdown_unknown_split_treated_as_all_grid():
     # No power_source_*_pct given at all -> same flat-rate result as before
     # the source split existed.
-    assert corrected_cost(energy_kwh=9.7, price_per_kwh=0.30) == pytest.approx(2.91)
+    assert corrected_cost_breakdown(energy_kwh=9.7, price_per_kwh=0.30).total == pytest.approx(2.91)
 
 
-def test_corrected_cost_splits_by_energy_source():
-    # 60% grid @ 0.30, 30% PV @ 0.10, 10% battery @ 0.15, over 10 kWh:
-    # 6*0.30 + 3*0.10 + 1*0.15 = 1.8 + 0.3 + 0.15 = 2.25
-    result = corrected_cost(
-        energy_kwh=10.0, price_per_kwh=0.30,
-        power_source_grid_pct=60, power_source_pv_pct=30, power_source_bat_pct=10,
-        pv_price_per_kwh=0.10, bat_price_per_kwh=0.15,
-    )
-    assert result == pytest.approx(2.25)
-
-
-def test_corrected_cost_all_pv_ignores_grid_rate():
-    result = corrected_cost(
+def test_corrected_cost_breakdown_all_pv_ignores_grid_rate():
+    breakdown = corrected_cost_breakdown(
         energy_kwh=10.0, price_per_kwh=0.30,
         power_source_grid_pct=0, power_source_pv_pct=100, power_source_bat_pct=0,
         pv_price_per_kwh=0.05, bat_price_per_kwh=0.15,
     )
-    assert result == pytest.approx(0.5)
+    assert breakdown.total == pytest.approx(0.5)
 
 
-def test_corrected_cost_chargepoint_share_priced_at_battery_rate():
-    result = corrected_cost(
+def test_corrected_cost_breakdown_chargepoint_share_priced_at_battery_rate():
+    breakdown = corrected_cost_breakdown(
         energy_kwh=10.0, price_per_kwh=0.30,
         power_source_grid_pct=0, power_source_cp_pct=100,
         pv_price_per_kwh=0.05, bat_price_per_kwh=0.20,
     )
-    assert result == pytest.approx(2.0)
+    assert breakdown.total == pytest.approx(2.0)
 
 
 def test_corrected_cost_breakdown_components_and_total():
@@ -177,15 +157,6 @@ def test_corrected_cost_breakdown_components_and_total():
 
 def test_corrected_cost_breakdown_none_energy_returns_none():
     assert corrected_cost_breakdown(energy_kwh=None, price_per_kwh=0.30) is None
-
-
-def test_corrected_cost_matches_breakdown_total():
-    kwargs = dict(
-        energy_kwh=10.0, price_per_kwh=0.30,
-        power_source_grid_pct=60, power_source_pv_pct=30, power_source_bat_pct=10,
-        pv_price_per_kwh=0.10, bat_price_per_kwh=0.15,
-    )
-    assert corrected_cost(**kwargs) == pytest.approx(corrected_cost_breakdown(**kwargs).total)
 
 
 def test_decide_price_no_entry_falls_back_to_openwb_cost():

@@ -7,20 +7,11 @@ has for openwb-logger, since every openWB IP is equally valid.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
 
 class SourceValidationError(ValueError):
     pass
-
-
-@dataclass
-class Source:
-    id: int
-    name: str
-    base_url: str
-    enabled: bool
 
 
 def normalize_base_url(raw: str) -> str:

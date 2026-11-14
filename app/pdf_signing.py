@@ -2,22 +2,17 @@
 
 Pure module -- no DB, no HTTP. A digital signature here proves the PDF
 bytes are exactly what was generated and haven't been altered since (an
-extension of this project's existing "reports are immutable" guarantee,
-see db.py's module docstring), not that the data inside is correct --
-`cost_basis="corrected"` reports still show user-entered price overrides,
-and the signature doesn't vouch for those being accurate, only that this
-is what was actually produced. Self-signed also means the certificate
-carries no identity trust chain: a recipient has to explicitly trust it
-(by importing `certificate_pem`) to see it as "valid" rather than merely
-"intact" in a PDF viewer -- there is no free path to a signature a viewer
-trusts automatically without that step (see the conversation that led to
-this module for the provider landscape). This is **not** the same thing
-as `report_settings.show_signature_line`, which is an unrelated, purely
-cosmetic blank line in the PDF footer for a handwritten signature.
+extension of this project's "reports are immutable" guarantee, see
+db.py) -- not that the data inside is correct; a corrected-cost report
+still shows user-entered price overrides, and signing doesn't vouch for
+those, only that this is what was produced. Self-signed also means no
+identity trust chain: a recipient must explicitly import
+`certificate_pem` to see the signature as "valid" rather than merely
+"intact" in a PDF viewer. **Not** the same thing as
+`report_settings.show_signature_line`, an unrelated cosmetic blank line
+for a handwritten signature.
 
-Uses pyhanko (PAdES/CMS signing) + cryptography (self-signed X.509
-cert/key generation) -- both already vendored as pinned dependencies.
-"""
+Uses pyhanko (PAdES/CMS) + cryptography (X.509 cert/key generation)."""
 from __future__ import annotations
 
 import datetime

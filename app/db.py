@@ -30,19 +30,16 @@ _SCHEMA_STATEMENTS = [
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     """,
-    # Natural key (source_id, chargepoint_serial_number, time_begin): a
-    # chargepoint can only run one session at a time, so its own start
-    # timestamp is a stable identity across refetches -- serial number is
-    # hardware-fixed, more durable than openWB's internal chargepoint id
-    # (which can be reassigned on reconfiguration). ON CONFLICT DO UPDATE
-    # (see fetch_service.py) overwrites every other column on refetch, which
-    # is what lets a still-charging session (time_end NULL on first fetch)
-    # get completed by the next day's fetch, and absorbs any correction
-    # openWB itself makes to the record in place.
+    # Natural key (source_id, chargepoint_serial_number, time_begin): one
+    # chargepoint runs one session at a time, so its start timestamp is a
+    # stable identity across refetches; serial number is hardware-fixed,
+    # more durable than openWB's own reassignable chargepoint id.
+    # ON CONFLICT DO UPDATE (fetch_service.py) overwrites every column on
+    # refetch, completing a still-charging session and absorbing any
+    # correction openWB makes in place.
     #
     # Known risk, not engineered around: two sessions on the same
-    # chargepoint starting in the same second would collide -- acceptable
-    # given openWB's own second-resolution timestamps.
+    # chargepoint starting in the same second would collide.
     """
     CREATE TABLE IF NOT EXISTS sessions (
         id BIGSERIAL PRIMARY KEY,
@@ -187,7 +184,7 @@ _SCHEMA_STATEMENTS = [
         show_signature_line BOOLEAN NOT NULL,
         orientation TEXT NOT NULL DEFAULT 'portrait',
         -- Global EUR/kWh rates for PV- and battery-sourced energy, used by
-        -- price_entries.corrected_cost alongside a session's matched (or
+        -- price_entries.corrected_cost_breakdown alongside a session's matched (or
         -- overridden) price_entries row, which only ever covers the
         -- grid-sourced share -- see price_entries.py's module docstring.
         -- Not scoped by source/vehicle/date like price_entries, since a

@@ -22,15 +22,10 @@ from .db import get_pool
 from .report_build import COLUMN_LABELS, ReportBuildError
 from .web import _generate_report, _query_sessions
 
-# mcp 2.x renamed FastMCP -> MCPServer and moved transport-specific
-# settings (streamable_http_path, transport_security) off the
-# constructor and onto streamable_http_app() instead -- see main.py's
-# app.mount() call, where those now live. The *reason* for both of them
-# is unchanged from the 1.x days, see there for the full explanation
-# (why streamable_http_path="/" specifically, and why DNS-rebinding
-# protection needs disabling for a mounted, LAN-trust app like this one --
-# confirmed live as a real bug in this same project before, not a
-# hypothetical).
+# mcp 2.x renamed FastMCP -> MCPServer and moved transport settings
+# (streamable_http_path, transport_security) off the constructor onto
+# streamable_http_app() -- see main.py's app.mount() call, where those
+# now live (and the full reasoning for both).
 mcp = MCPServer("openwb-ladeprotokoll")
 
 # Modest default, unlike the web UI's own /api/sessions (no cap at all --
