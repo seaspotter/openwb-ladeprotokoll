@@ -1,0 +1,77 @@
+/* Shared design tokens and base component CSS, aligned with the Quartz
+   look (see .claude/skills/quartz-design) -- reimplemented here in plain
+   CSS, not copied from Quartz's own Tailwind/Vue files (this project stays
+   vanilla, no build step). Previously duplicated almost byte-for-byte
+   across index.html/statistik.html/report_review.html's own inline
+   <style> blocks; now one file, linked from each. */
+
+:root {
+  --bg: #f1f2f4; --panel: #ffffff; --border: #e3e5e9;
+  --text: #1a1d24; --muted: #6b7280; --accent: #2563eb;
+  --ok: #1f9d55; --warning: #ea580c; --error: #e11d48;
+  /* Entity colors, used by statistik.html's Chart.js bars (Netz/PV/
+     Speicher/Ladepunkt) -- "Netz" (grid draw) deliberately uses
+     --consumption (slate), not Quartz's own --grid (red, "danger"): grid
+     energy usage is a normal data series here, not a fault. */
+  --pv: #1f9d55; --battery: #eab308; --chargepoint: #2563eb; --consumption: #475569;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0b0d; --panel: #1f232b; --border: #343a46;
+    --text: #e7e9ee; --muted: #9aa0ac; --accent: #2563eb;
+    --ok: #3ec776; --warning: #fb923c; --error: #fb7185;
+    --pv: #3ec776; --battery: #facc15; --chargepoint: #5b9bff; --consumption: #a7b0bf;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0b0d; --panel: #1f232b; --border: #343a46;
+  --text: #e7e9ee; --muted: #9aa0ac; --accent: #2563eb;
+  --ok: #3ec776; --warning: #fb923c; --error: #fb7185;
+  --pv: #3ec776; --battery: #facc15; --chargepoint: #5b9bff; --consumption: #a7b0bf;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* Cards/panels: flat, 1px border, no shadow -- Quartz's `.panel`. */
+.panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; margin-bottom: 16px;
+}
+.panel h2 {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  margin: 0 0 12px; color: var(--muted); text-transform: uppercase;
+}
+
+select, input[type=text], input[type=date], input[type=number], input[type=month],
+input[type=time], button {
+  font-size: 13px;
+}
+select, input[type=text], input[type=date], input[type=number], input[type=month],
+input[type=time] {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 8px;
+}
+button, a.nav-btn {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 12px; cursor: pointer;
+}
+button:hover, a.nav-btn:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+a.nav-btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* Icon button: round, not square -- Quartz's BaseIconButton (26px, 22px
+   on narrow viewports). */
+.header-icon-btn {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; width: 26px; height: 26px; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+  text-decoration: none;
+}
+.header-icon-btn:hover { border-color: var(--accent); }
+@media (max-width: 640px) {
+  .header-icon-btn { width: 22px; height: 22px; }
+}

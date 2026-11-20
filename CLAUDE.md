@@ -485,6 +485,20 @@ Full picture in `README.md`; details in `DEVELOPMENT.md` and
   otherwise the only external-network dependency anywhere in the app
   (every icon is inline SVG); a CDN script would silently stop working on
   a fully offline LAN, which this app is explicitly designed to run on.
+  Also serves `app/static/theme.css`, this project's own first-party
+  stylesheet (not vendored third-party).
+- `app/static/theme.css` — shared design tokens (`:root`/`:root[data-theme
+  ='dark']`) and base component CSS (`.panel`, buttons, inputs,
+  `.header-icon-btn`), aligned with the Quartz look
+  (`.claude/skills/quartz-design`) but reimplemented in plain CSS, not
+  copied from Quartz's own Tailwind/Vue files — this project stays
+  vanilla, no build step, and copying Quartz's files verbatim would carry
+  its GPL-3.0 license, unlike reimplementing the tokens/rules. Linked from
+  `index.html`/`statistik.html`/`report_review.html`; previously each of
+  those three duplicated the same `:root`/button/input/`.panel` block
+  inline, almost byte-for-byte. `_settings_modal.html` (shared via
+  `{% include %}` across all three pages) stays include-only, no own
+  `<link>` needed since its host page already has one.
 - `app/mcp_server.py` — MCP server (`MCPServer`, Streamable HTTP
   transport) mounted at `/mcp` on the same FastAPI app/port, identical
   pattern to `openwb-logger/app/mcp_server.py`. **mcp 2.x (2026-10)**

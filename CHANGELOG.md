@@ -7,6 +7,20 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Changed
+- UI restyled to align with Quartz (openWB's own dashboard look, see
+  `.claude/skills/quartz-design`): cards/panels/modal/inputs now 14px/10px
+  radius instead of 6-8px, buttons and icon buttons fully round (header
+  icon buttons 26px, 22px on narrow screens) instead of 32px square,
+  icons `stroke-width` 1.8 instead of 2. Palette tokens now match
+  Quartz's exact values (dark-mode accent is now the same `#2563eb` as
+  light mode, not a separately lightened `#4da3ff`). `statistik.html`'s
+  Chart.js bars (Netz/PV/Speicher/Ladepunkt) now read their colors from
+  the new entity tokens instead of a hardcoded hex list -- "Netz" stays
+  slate (`--consumption`), not Quartz's own red `--grid` token, since
+  grid energy usage is a normal data series here, not a fault. Tokens and
+  base component CSS move out of three separately-duplicated inline
+  `<style>` blocks (`index.html`/`statistik.html`/`report_review.html`)
+  into one new `app/static/theme.css`.
 - `pyhanko` 0.38.1 → 0.38.2 -- no dependency or breaking changes, just
   bug fixes (notably "enforce hex encoding on signature /Contents").
   Not yet proposed by Dependabot; found while checking the rest of the
