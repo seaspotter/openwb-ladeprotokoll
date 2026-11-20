@@ -45,7 +45,10 @@ try {
     <button type="button" hx-post="/hx/fetch-now" hx-target="#fetch-result" hx-swap="innerHTML" hx-disabled-elt="this">Jetzt abrufen</button>
     <a href="/statistik" class="nav-btn">Statistik</a>
     <a href="/report-review" class="nav-btn">Bericht erstellen &rarr;</a>
-    <button type="button" class="header-icon-btn" id="theme-toggle" data-theme-toggle title="Hell/Dunkel"></button>
+    <label class="theme-switch" title="Hell/Dunkel">
+      <input type="checkbox" id="theme-toggle" data-theme-toggle>
+      <span class="track"><span class="thumb"></span></span>
+    </label>
     <button type="button" class="header-icon-btn" data-open-settings title="Einstellungen">&#9881;</button>
   </div>
 </header>
@@ -68,7 +71,7 @@ try {
         <option value="">Alle Fahrzeuge</option>
       </select>
       <select id="filter-chargepoint" name="chargepoint"><option value="">Alle Ladepunkte</option></select>
-      <input type="date" id="filter-from" name="from_">
+      <input type="date" id="filter-from" name="from_" value="{{ default_from }}">
       <input type="date" id="filter-to" name="to">
       <button type="submit">Filtern</button>
       <span class="session-count" id="session-count"></span>

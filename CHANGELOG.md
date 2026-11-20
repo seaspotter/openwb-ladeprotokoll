@@ -6,8 +6,6 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
-## [0.5.6] - 2026-11-20
-
 ### Changed
 - UI restyled to align with Quartz (openWB's own dashboard look, see
   `.claude/skills/quartz-design`): cards/panels/modal/inputs now 14px/10px
@@ -22,7 +20,20 @@ what that means in practice for this project.
   grid energy usage is a normal data series here, not a fault. Tokens and
   base component CSS move out of three separately-duplicated inline
   `<style>` blocks (`index.html`/`statistik.html`/`report_review.html`)
-  into one new `app/static/theme.css`.
+  into one new `app/static/theme.css`. Header nav links (`a.nav-btn`)
+  now share the same 13px font-size as every other control instead of
+  falling back to the browser default -- the one rule the stylesheet
+  consolidation above had missed. The dark/light switch is now an
+  actual slide toggle (Quartz's own toggle recipe) instead of a sun/moon
+  icon button.
+- `index.html`'s session list and `report_review.html`'s filter form now
+  default their "von" date to 30 days ago on first load, instead of
+  rendering every session ever fetched (hundreds to thousands of rows)
+  before any filter is applied.
+
+## [0.5.6] - 2026-11-20
+
+### Changed
 - `pyhanko` 0.38.1 → 0.38.2 -- no dependency or breaking changes, just
   bug fixes (notably "enforce hex encoding on signature /Contents").
   Not yet proposed by Dependabot; found while checking the rest of the

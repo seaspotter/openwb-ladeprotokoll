@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -113,14 +113,24 @@ def _source_row(r) -> dict:
     }
 
 
+def _default_filter_from() -> str:
+    """Pre-filters the session list/report-review forms to the last 30
+    days on first load -- without it, both pages render every session
+    ever fetched (hundreds to thousands of rows) before the user narrows
+    anything down."""
+    return (date.today() - timedelta(days=30)).isoformat()
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"default_from": _default_filter_from()})
 
 
 @router.get("/report-review", response_class=HTMLResponse)
 async def report_review(request: Request):
-    return templates.TemplateResponse(request, "report_review.html")
+    return templates.TemplateResponse(
+        request, "report_review.html", {"default_from": _default_filter_from()},
+    )
 
 
 @router.get("/statistik", response_class=HTMLResponse)
