@@ -6,6 +6,8 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-11-20
+
 ### Changed
 - `pyhanko` 0.38.1 → 0.38.2 -- no dependency or breaking changes, just
   bug fixes (notably "enforce hex encoding on signature /Contents").
@@ -22,6 +24,12 @@ what that means in practice for this project.
   real `TestClient` request through `/api/sessions` (mixed int/str/date
   query params) reaching the handler body cleanly, plus real
   `TemplateResponse` renders of `index.html`/`statistik.html`.
+- Docker base image `python:3.12-slim` → `python:3.15-slim` (Dependabot
+  PR #23) -- the `fastapi`/`mcp`/`starlette` conflict that used to block
+  this (see the `[0.4.0]` entry below) was already resolved by the `mcp`
+  2.3.0 upgrade; confirmed by this exact bump actually building and
+  passing CI. Also fixed the Dockerfile comment above `FROM`, which still
+  warned of that now-resolved conflict.
 
 ## [0.5.5] - 2026-11-14
 
