@@ -7,6 +7,12 @@ what that means in practice for this project.
 ## [Unreleased]
 
 ### Changed
+- `pyhanko` 0.38.1 → 0.38.2 -- no dependency or breaking changes, just
+  bug fixes (notably "enforce hex encoding on signature /Contents").
+  Not yet proposed by Dependabot; found while checking the rest of the
+  dependency surface after the `fastapi` bump below. Verified with the
+  full test suite, including the real end-to-end
+  generate-cert/sign/validate round trip in `test_pdf_signing.py`.
 - `fastapi` 0.162.3 → 0.165.0 (further than Dependabot's own PR proposed,
   which only reached 0.163.1) -- verified it doesn't force a `starlette`
   upgrade (stays at the already-installed 1.9.0, well above 0.165.0's new
