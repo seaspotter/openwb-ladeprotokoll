@@ -1,11 +1,8 @@
-# Pinned below 3.14 deliberately: mcp==1.29.0 only requires
-# starlette>=0.48.0 under python_version>="3.14", which conflicts with
-# fastapi==0.115.0's starlette<0.39.0 pin -- invisible under 3.12/3.13,
-# but breaks `pip install` outright on 3.14+. A Dependabot bump to
-# python:3.14-slim (or later) was merged once already and immediately
-# broke the image build for exactly this reason; don't re-merge one
-# without also resolving this fastapi/mcp/starlette conflict first
-# (bumping mcp alone, see its own open Dependabot PRs, is the likely fix).
+# The fastapi<->mcp starlette-version conflict that once blocked bumping
+# past python:3.12-slim is resolved as of mcp==2.3.0 (see CHANGELOG.md) --
+# confirmed by this exact bump (3.12-slim -> 3.15-slim) actually building
+# and passing CI (pr-build-check.yml exists specifically to catch this
+# class of failure before merge, after it broke once silently before).
 FROM python:3.15-slim
 
 WORKDIR /app
