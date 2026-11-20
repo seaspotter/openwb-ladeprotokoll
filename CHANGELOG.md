@@ -6,6 +6,17 @@ what that means in practice for this project.
 
 ## [Unreleased]
 
+### Changed
+- `fastapi` 0.162.3 → 0.165.0 (further than Dependabot's own PR proposed,
+  which only reached 0.163.1) -- verified it doesn't force a `starlette`
+  upgrade (stays at the already-installed 1.9.0, well above 0.165.0's new
+  `>=1.6.0` floor, up from `>=0.46.0`), so the `TemplateResponse`-signature
+  risk from a past incident doesn't apply here. Checked specifically
+  against 0.163.2's query/header/form parameter extraction refactor via a
+  real `TestClient` request through `/api/sessions` (mixed int/str/date
+  query params) reaching the handler body cleanly, plus real
+  `TemplateResponse` renders of `index.html`/`statistik.html`.
+
 ## [0.5.5] - 2026-11-14
 
 ### Changed
